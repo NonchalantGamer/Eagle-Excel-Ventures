@@ -134,20 +134,6 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
       window.name = '';
       sessionStorage.removeItem('ee_is_oauth_popup');
     } catch (e) {}
-
-    // 6. Try to focus opener and close popup window
-    try {
-      if (window.opener && !window.opener.closed) {
-        window.opener.focus();
-        setTimeout(() => {
-          try {
-            window.close();
-          } catch {}
-        }, 600);
-      }
-    } catch (e) {
-      // Ignore focus errors
-    }
   };
 
   useEffect(() => {
@@ -288,40 +274,20 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
       ? `${window.location.origin}/#/` 
       : 'https://eagle-excel-ventures.vercel.app/#/';
 
-    // 2. Attempt to notify and focus opener if this is a popup
-    try {
-      if (window.opener && !window.opener.closed) {
-        try {
-          window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', redirectToHome: true }, '*');
-          window.opener.postMessage({ type: 'NAVIGATE_VIEW', view: 'home' }, '*');
-          if (window.opener.location) {
-            window.opener.location.hash = '#/';
-          }
-        } catch (e) {}
-        window.opener.focus();
-        window.close();
-        return;
-      }
-    } catch (e) {}
-
-    try {
-      window.close();
-    } catch (e) {}
-
-    // 3. Clean URL history state to root homescreen
+    // 2. Clean URL history state to root homescreen
     try {
       if (window.history && window.history.replaceState) {
         window.history.replaceState({}, document.title, targetHomeUrl);
       }
     } catch {}
 
-    // 4. If callback prop provided, transition directly in-place without page reload
+    // 3. If callback prop provided, transition directly in-place without page reload
     if (onComplete) {
       onComplete();
       return;
     }
 
-    // 5. Fallback navigation
+    // 4. Fallback navigation
     try {
       window.location.hash = '#/';
     } catch (e) {
