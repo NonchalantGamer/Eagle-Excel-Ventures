@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- Browser Extension & Web3 Injection Collision Guard (prevents 'Cannot redefine property: ethereum') -->
+    <script>
+      (function() {
+        try {
+          // 1. Intercept Object.defineProperty to safely permit multiple wallet extensions/iframe re-definitions
+          var origDefineProperty = Object.defineProperty;
+          var protectedProps = ['ethereum', 'solana', 'phantom', 'coinbasewalletextension', 'web3', 'trustwallet', 'bitkeep'];
+          
+          Object.defineProperty = function(target, propertyKey, descriptor) {
+            try {
+              if (target === window && typeof propertyKey === 'string') {
+                var lowerKey = propertyKey.toLowerCase();
+                if (protectedProps.indexOf(lowerKey) !== -1) {
+                  var currentDescriptor = Object.getOwnPropertyDescriptor(window, propertyKey);
+                  if (currentDescriptor && !currentDescriptor.configurable) {
+                    // Property already defined non-configurably; safely return target rather than throwing TypeError
+                    return target;
+                  }
+                  if (descriptor && typeof descriptor === 'object') {
+                    descriptor.configurable = true;
+                  }
+                }
+              }
+              return origDefineProperty.call(Object, target, propertyKey, descriptor);
+            } catch (e) {
+              return target;
+            }
+          };
+
+          // 2. Pre-declare configurable ethereum property on window to absorb extension assignments
+          var _eth = undefined;
+          try {
+            Object.defineProperty(window, 'ethereum', {
+              get: function() { return _eth; },
+              set: function(val) { _eth = val; },
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e) {}
+
+          // 3. Catch and suppress uncaught errors from external browser extensions
+          window.addEventListener('error', function(event) {
+            var msg = (event && (event.message || (event.error && event.error.message))) || '';
+            var filename = (event && event.filename) || '';
+            if (
+              (typeof msg === 'string' && (
+                msg.indexOf('redefine property: ethereum') !== -1 ||
+                msg.indexOf('ethereum') !== -1 ||
+                msg.indexOf('ResizeObserver loop') !== -1
+              )) ||
+              (typeof filename === 'string' && (
+                filename.indexOf('extension') !== -1 ||
+                filename.indexOf('chrome-extension') !== -1 ||
+                filename.indexOf('moz-extension') !== -1
+              ))
+            ) {
+              if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+              if (event.preventDefault) event.preventDefault();
+              return true;
+            }
+          }, true);
+
+          // 4. Catch and suppress unhandled promise rejections from extensions
+          window.addEventListener('unhandledrejection', function(event) {
+            var reasonMsg = (event && event.reason && (event.reason.message || event.reason.toString())) || '';
+            if (typeof reasonMsg === 'string' && (
+              reasonMsg.indexOf('redefine property: ethereum') !== -1 ||
+              reasonMsg.indexOf('ethereum') !== -1
+            )) {
+              if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+              if (event.preventDefault) event.preventDefault();
+              return true;
+            }
+          }, true);
+        } catch (err) {}
+      })();
+    </script>
+    
+    <!-- Favicon & Brand Icon (Dynamic Light & Dark support) -->
+    <link rel="icon" type="image/png" id="brand-favicon" href="https://res.cloudinary.com/doujptiz/image/upload/v1785982713/1785982475017_efn0fp.png" />
+    <link rel="apple-touch-icon" id="brand-apple-icon" href="https://res.cloudinary.com/doujptiz/image/upload/v1785982713/1785982475017_efn0fp.png" />
+    
+    <!-- SEO Primary Meta Tags -->
+    <title>Eagle Excel Ventures | Enterprise B2B Wholesale & Supply Distribution</title>
+    <meta name="title" content="Eagle Excel Ventures | Enterprise B2B Wholesale & Supply Distribution" />
+    <meta name="description" content="Direct manufacturer & wholesale distributor platform for Eagle Excel Ventures. Access bulk tiered pricing, instant order fulfillment, real-time inventory, and dedicated account support." />
+    <meta name="keywords" content="Eagle Excel Ventures, wholesale, B2B marketplace, bulk supply, wholesale distribution, bulk orders, enterprise procurement" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0a0a0a" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Eagle Excel Ventures | Enterprise B2B Wholesale & Supply Distribution" />
+    <meta property="og:description" content="Eagle Excel Ventures - Direct manufacturer & wholesale distributor platform. Tiered wholesale pricing, instant tracking, and B2B ordering." />
+    <meta property="og:image" content="https://res.cloudinary.com/doujptiz/image/upload/v1785975451/sean-pollock-PhYq704ffdA-unsplash_bt4wst.jpg" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="Eagle Excel Ventures | Enterprise B2B Wholesale & Supply Distribution" />
+    <meta property="twitter:description" content="Eagle Excel Ventures - Direct manufacturer & wholesale distributor platform. Tiered wholesale pricing, instant tracking, and B2B ordering." />
+    <meta property="twitter:image" content="https://res.cloudinary.com/doujptiz/image/upload/v1785975451/sean-pollock-PhYq704ffdA-unsplash_bt4wst.jpg" />
+
+    <!-- Performance Resource Hints -->
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
+    <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+    <link rel="dns-prefetch" href="https://images.unsplash.com" />
+
+    <!-- High Priority Hero Background Preload for Sub-Second Initial Paint on Mobile & Desktop -->
+    <link
+      rel="preload"
+      as="image"
+      href="https://res.cloudinary.com/doujptiz/image/upload/f_auto,q_auto:good,w_640,c_limit/v1786376597/ChatGPT_Image_Aug_10_2026_04_39_38_PM_eirooz.png"
+      imagesrcset="https://res.cloudinary.com/doujptiz/image/upload/f_auto,q_auto:good,w_640,c_limit/v1786376597/ChatGPT_Image_Aug_10_2026_04_39_38_PM_eirooz.png 640w, https://res.cloudinary.com/doujptiz/image/upload/f_auto,q_auto:good,w_1024,c_limit/v1786376597/ChatGPT_Image_Aug_10_2026_04_39_38_PM_eirooz.png 1024w, https://res.cloudinary.com/doujptiz/image/upload/f_auto,q_auto:good,w_1600,c_limit/v1786376597/ChatGPT_Image_Aug_10_2026_04_39_38_PM_eirooz.png 1600w"
+      imagesizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 1280px"
+      fetchpriority="high"
+    />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Theme Initialization (prevents flash of wrong theme, defaults to device system preference) -->
+    <script>
+      (function() {
+        try {
+          var storedTheme = localStorage.getItem('eev_theme');
+          var isDark = storedTheme === 'dark' || (storedTheme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          var darkLogo = "https://res.cloudinary.com/doujptiz/image/upload/v1785988903/file_0000000090208246b8ee84f3f9f2bfe2_hxbnbi.png";
+          var lightLogo = "https://res.cloudinary.com/doujptiz/image/upload/v1785982713/1785982475017_efn0fp.png";
+          var logoUrl = isDark ? darkLogo : lightLogo;
+          if (isDark) {
+            root.classList.add('dark');
+            root.setAttribute('data-theme', 'dark');
+            root.style.colorScheme = 'dark';
+          } else {
+            root.classList.remove('dark');
+            root.setAttribute('data-theme', 'light');
+            root.style.colorScheme = 'light';
+          }
+          var fav = document.getElementById('brand-favicon') || document.querySelector('link[rel="icon"]');
+          if (fav) fav.href = logoUrl;
+          var appleFav = document.getElementById('brand-apple-icon') || document.querySelector('link[rel="apple-touch-icon"]');
+          if (appleFav) appleFav.href = logoUrl;
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-slate-50 text-slate-900 dark:bg-[#0a0a0a] dark:text-zinc-100 font-sans antialiased selection:bg-[#F27D26] selection:text-black min-h-screen transition-colors duration-300">
+    <div id="root"></div>
+    <!-- Flutterwave Inline Checkout SDK v3 -->
+    <script src="https://checkout.flutterwave.com/v3.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

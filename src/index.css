@@ -1,0 +1,477 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --section-gap: 1.75rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --section-gap: 2.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --section-gap: 2.5rem;
+  }
+}
+
+@layer base {
+  html {
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: clip;
+    overscroll-behavior-y: auto;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
+  }
+
+  .font-serif {
+    font-family: 'Newsreader', Georgia, Cambria, 'Times New Roman', Times, serif;
+  }
+}
+
+/* Fluid hardware-accelerated momentum scrolling on scroll containers */
+html,
+body,
+#root,
+main,
+[data-scrollable="true"],
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto,
+.custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* GPU Layer Promotion for Fixed/Sticky Controls */
+nav,
+header,
+.sticky,
+.fixed-gpu-layer {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Scrollbars for Light & Dark Themes */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+html:not(.dark) ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(242, 125, 38, 0.6) !important;
+}
+
+/* =========================================================
+   SCROLL REVEAL ANIMATIONS (Smooth, Fluid, Cascading)
+   ========================================================= */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.reveal-on-scroll.reveal-fast {
+  transition-duration: 0.35s;
+}
+
+.reveal-on-scroll.reveal-slide-left {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+
+.reveal-on-scroll.reveal-slide-right {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+.reveal-on-scroll.reveal-scale {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.reveal-on-scroll.is-revealed {
+  opacity: 1 !important;
+  transform: translateY(0) translateX(0) scale(1) !important;
+}
+
+/* Stagger delay helpers for grid cascading */
+.stagger-1 { transition-delay: 50ms; }
+.stagger-2 { transition-delay: 100ms; }
+.stagger-3 { transition-delay: 150ms; }
+.stagger-4 { transition-delay: 200ms; }
+.stagger-5 { transition-delay: 250ms; }
+.stagger-6 { transition-delay: 300ms; }
+
+.delay-75 { transition-delay: 75ms; }
+.delay-100 { transition-delay: 100ms; }
+.delay-150 { transition-delay: 150ms; }
+.delay-200 { transition-delay: 200ms; }
+.delay-300 { transition-delay: 300ms; }
+.delay-400 { transition-delay: 400ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-on-scroll {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* GPU & Layout Performance */
+.product-card-container {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 380px;
+}
+
+/* =========================================================
+   BUTTON HOVER ANIMATIONS & ZERO-SHADOW DIRECTIVES
+   ========================================================= */
+.btn-hover {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  box-shadow: none !important;
+}
+
+.btn-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: none !important;
+}
+
+.btn-hover:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: none !important;
+}
+
+.btn-primary-morphic {
+  background: linear-gradient(135deg, #F27D26 0%, #e06d1a 100%);
+  color: #000000;
+  font-weight: 700;
+  box-shadow: none !important;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease, background 0.2s ease;
+}
+
+.btn-primary-morphic:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow: none !important;
+}
+
+.btn-primary-morphic:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: none !important;
+}
+
+/* Enforce zero shadow and strict single-line text across all buttons (no multi-line text wrapping on mobile) */
+button,
+[role="button"],
+.btn,
+.btn-hover,
+.btn-primary-morphic,
+[type="button"],
+[type="submit"],
+[type="reset"] {
+  white-space: nowrap !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+button span,
+[role="button"] span,
+.btn span,
+.btn-hover span,
+.btn-primary-morphic span,
+[type="button"] span,
+[type="submit"] span,
+[type="reset"] span {
+  white-space: nowrap !important;
+}
+
+button:hover,
+button:focus,
+button:active,
+[role="button"]:hover,
+[role="button"]:focus,
+[role="button"]:active,
+.btn:hover,
+.btn:focus,
+.btn:active,
+.btn-hover:hover,
+.btn-hover:focus,
+.btn-hover:active,
+.btn-primary-morphic:hover,
+.btn-primary-morphic:focus,
+.btn-primary-morphic:active,
+[type="button"]:hover,
+[type="button"]:focus,
+[type="button"]:active,
+[type="submit"]:hover,
+[type="submit"]:focus,
+[type="submit"]:active,
+[type="reset"]:hover,
+[type="reset"]:focus,
+[type="reset"]:active {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* =========================================================
+   ICON MORPHISM (Glassmorphic, Neumorphic, Tactile Morph)
+   ========================================================= */
+.icon-morphism {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html.dark .icon-morphism {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.4), inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+}
+
+html:not(.dark) .icon-morphism {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 245, 249, 0.85) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08), inset 0 1px 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+}
+
+.icon-morphism:hover {
+  transform: translateY(-2px) rotate(3deg) scale(1.06);
+}
+
+html.dark .icon-morphism:hover {
+  border-color: rgba(242, 125, 38, 0.4);
+  box-shadow: 0 8px 20px -2px rgba(242, 125, 38, 0.25), inset 0 1px 2px 0 rgba(255, 255, 255, 0.25);
+}
+
+html:not(.dark) .icon-morphism:hover {
+  border-color: rgba(242, 125, 38, 0.5);
+  box-shadow: 0 8px 20px -2px rgba(242, 125, 38, 0.2), inset 0 1px 2px 0 rgba(255, 255, 255, 1);
+}
+
+.icon-morphism-accent {
+  background: linear-gradient(135deg, rgba(242, 125, 38, 0.2) 0%, rgba(242, 125, 38, 0.05) 100%) !important;
+  border: 1px solid rgba(242, 125, 38, 0.3) !important;
+  box-shadow: 0 4px 14px 0 rgba(242, 125, 38, 0.2), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+.icon-morphism-accent:hover {
+  border-color: rgba(242, 125, 38, 0.6) !important;
+  box-shadow: 0 6px 20px 0 rgba(242, 125, 38, 0.35), inset 0 1px 2px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+/* =========================================================
+   BRAND LOGO ENHANCED SHARPNESS & BOLD CONTRAST
+   ========================================================= */
+.brand-logo-badge {
+  background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
+  border: 1.5px solid rgba(242, 125, 38, 0.55);
+  box-shadow: 0 4px 14px -2px rgba(242, 125, 38, 0.2), inset 0 1px 1.5px 0 rgba(255, 255, 255, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html.dark .brand-logo-badge {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid rgba(242, 125, 38, 0.45);
+  box-shadow: none !important;
+}
+
+.brand-logo-badge:hover {
+  transform: translateY(-1.5px) scale(1.05);
+  border-color: rgba(242, 125, 38, 0.85);
+  box-shadow: 0 6px 18px -2px rgba(242, 125, 38, 0.3), inset 0 1px 2px 0 rgba(255, 255, 255, 0.5);
+}
+
+html.dark .brand-logo-badge:hover {
+  box-shadow: none !important;
+  border-color: rgba(242, 125, 38, 0.7);
+}
+
+.brand-logo-img {
+  image-rendering: -webkit-optimize-contrast;
+  filter: contrast(1.15) brightness(1.02);
+}
+
+html.dark .brand-logo-img {
+  filter: none;
+}
+
+/* Animations */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+@keyframes scaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-scaleUp {
+  animation: scaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* =========================================================
+   STANDARDIZED HOMEPAGE SECTION FLOW WITH --section-gap
+   ========================================================= */
+.homepage-section-flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+  width: 100%;
+}
+
+/* =========================================================
+   CSS SKELETON SHIMMER (Hardware-accelerated, Fluid Gradient)
+   ========================================================= */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 1.6s infinite ease-in-out;
+}
+
+html.dark .skeleton-shimmer::after {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+/* Modal Stacking Protection */
+[data-portal-modal="true"] {
+  z-index: 99999 !important;
+  isolation: isolate;
+}
+
+/* =========================================================
+   MENU OPEN: BACKGROUND BLUR & MOVEMENT FREEZE
+   ========================================================= */
+.menu-backdrop-blurred {
+  filter: blur(10px) brightness(0.82) saturate(0.85);
+  transform: scale(0.995);
+  pointer-events: none !important;
+  user-select: none !important;
+  touch-action: none !important;
+  transition: filter 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: filter, transform;
+}
+
+html.dark .menu-backdrop-blurred {
+  filter: blur(10px) brightness(0.65) saturate(0.8);
+}
+
+body.menu-open-locked,
+body.modal-open-locked,
+body.notification-open-locked {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: none !important;
+  user-select: none !important;
+}
+
+html:has(body.notification-open-locked),
+html:has(body.menu-open-locked),
+html:has(body.modal-open-locked) {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
+
+

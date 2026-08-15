@@ -1,0 +1,6 @@
+{
+  "name": "Eagle Excel Ventures",
+  "description": "B2B wholesale trading platform for Eagle Excel Ventures with multi-role auth, tiered bulk pricing, real-time inventory, customer messaging, and executive admin dashboard powered by Supabase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
