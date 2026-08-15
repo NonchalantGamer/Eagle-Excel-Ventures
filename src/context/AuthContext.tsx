@@ -459,6 +459,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = async (): Promise<void> => {
     await logoutUser();
     localStorage.removeItem('ee_last_active_user_id');
+    localStorage.removeItem('ee_cached_notifications');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ee_notification_update', { detail: { timestamp: Date.now() } }));
+      window.dispatchEvent(new CustomEvent('ee_customer_unread_count', { detail: { count: 0 } }));
+    }
     setCurrentUser(null);
     setUserProfile(null);
   };

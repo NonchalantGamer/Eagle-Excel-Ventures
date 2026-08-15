@@ -608,7 +608,7 @@ export const MobileNavigationDrawer: React.FC<MobileNavigationDrawerProps> = ({
                       <MessageSquare className="w-4 h-4 text-[#F27D26]" />
                       <span>Live 24/7 B2B Support Channel</span>
                     </div>
-                    {liveUnreadCount > 0 ? (
+                    {currentUser && liveUnreadCount > 0 ? (
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white">
                           {liveUnreadCount}

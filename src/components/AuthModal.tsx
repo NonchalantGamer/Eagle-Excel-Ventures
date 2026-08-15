@@ -106,7 +106,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       if (mode === 'login') {
         const profile = await loginWithEmail(email.trim(), password);
-        showToast(`Welcome back, ${profile.displayName}!`);
         onClose();
         onLoginSuccess?.(profile.role);
       } else if (mode === 'signup') {
@@ -116,7 +115,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           name.trim(), 
           companyName.trim()
         );
-        showToast(`Account successfully registered for ${profile.displayName}!`);
         onClose();
         onLoginSuccess?.(profile.role);
       } else if (mode === 'forgot') {

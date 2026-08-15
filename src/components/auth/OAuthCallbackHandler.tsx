@@ -160,36 +160,19 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
       isFinished = true;
 
       setAuthenticatedUser(session.user);
-      setStatus('success');
 
-      // Trigger post-auth user profile initialization and database upsert
+      // Trigger post-auth user profile initialization and database upsert in background
       try {
         await handlePostAuthProfileTrigger(session.user);
       } catch (pErr) {
         console.warn('[OAuthCallback] Profile trigger warning:', pErr);
       }
 
-      // Clean URL history state without reloading
-      try {
-        if (window.history && window.history.replaceState) {
-          window.history.replaceState({}, document.title, window.location.pathname.replace(/\/auth\/callback\/?$/, '') || '/');
-        }
-      } catch {}
-
       // Notify parent window, cross-tab channels, and storage
       notifyParentAndClose(session);
 
-      // Countdown timer to auto-close popup or redirect
-      timer = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            if (timer) clearInterval(timer);
-            handleReturnToWebsite();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      // Immediately return directly back to the website without displaying a welcome card or countdown delay
+      handleReturnToWebsite();
     };
 
     const processAuth = async () => {

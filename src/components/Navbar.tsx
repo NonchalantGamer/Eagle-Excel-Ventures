@@ -309,7 +309,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Real-time Notification Alert Dropdown */}
-            <NotificationDropdown onNavigate={onNavigate} />
+            <NotificationDropdown onNavigate={onNavigate} onOpenAuth={onOpenAuth} />
 
             {/* User Profile Picture with Dropdown Popover */}
             {currentUser ? (

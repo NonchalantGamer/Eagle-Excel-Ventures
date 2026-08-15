@@ -55,7 +55,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { currentUser, userProfile, role, isAdmin } = useAuth();
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_SEED_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('ee_notif_sound_enabled');
@@ -91,10 +91,16 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, [importantOnly]);
 
-  // Subscribe to real-time notification updates based on active role
+  // Subscribe to real-time notification updates based on active authenticated user
   useEffect(() => {
+    // When signed out, ensure no messages or notification badges remain active
+    if (!currentUser) {
+      setNotifications([]);
+      return;
+    }
+
     const activeRole: UserRole = isAdmin ? 'admin' : 'customer';
-    const userId = currentUser?.uid || null;
+    const userId = currentUser.uid;
     let isInitialLoad = true;
 
     const unsubscribe = subscribeToNotifications(activeRole, userId, (notifs) => {
@@ -130,10 +136,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
   }, [currentUser, isAdmin, role, soundEnabled]);
 
-  const importantNotifications = notifications.filter(isImportantNotification);
+  const importantNotifications = currentUser ? notifications.filter(isImportantNotification) : [];
 
-  // Unread count is filtered to important notifications if importantOnly is active
-  const unreadCount = (importantOnly ? importantNotifications : notifications).filter(n => !n.read).length;
+  // Unread count is strictly 0 if user is signed out
+  const unreadCount = !currentUser
+    ? 0
+    : (importantOnly ? importantNotifications : notifications).filter(n => !n.read).length;
 
   const markAsRead = async (id: string) => {
     await markNotificationAsRead(id);
