@@ -89,9 +89,9 @@ export async function registerWithEmailAndPassword(
 }
 
 /**
- * Sign in using Google OAuth (Popup-safe for iframe & standalone preview)
+ * Sign in using Google OAuth (Full-page browser redirect)
  */
-export async function loginWithGoogleOAuth(options?: { redirectTo?: string }): Promise<{ url?: string; popup?: Window | null }> {
+export async function loginWithGoogleOAuth(options?: { redirectTo?: string }): Promise<{ url?: string }> {
   if (!isSupabaseEnabled()) {
     throw new Error('Supabase authentication is not configured. Please check your Supabase credentials in settings.');
   }
@@ -102,7 +102,7 @@ export async function loginWithGoogleOAuth(options?: { redirectTo?: string }): P
   }
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : undefined;
-  // Default to /auth/callback or current origin for smooth popup handling
+  // Default to /auth/callback or current origin for smooth redirect handling
   const redirectUrl = options?.redirectTo || (currentOrigin ? `${currentOrigin}/auth/callback` : undefined);
 
   // Clear any prior OAuth signal and set in-progress marker
@@ -113,12 +113,12 @@ export async function loginWithGoogleOAuth(options?: { redirectTo?: string }): P
     } catch (e) {}
   }
 
-  // Use skipBrowserRedirect so Google OAuth doesn't get blocked by X-Frame-Options in iframe
+  // Use standard browser redirect for OAuth authentication
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: redirectUrl,
-      skipBrowserRedirect: true,
+      skipBrowserRedirect: false,
       queryParams: {
         access_type: 'offline',
         prompt: 'select_account',
@@ -130,32 +130,13 @@ export async function loginWithGoogleOAuth(options?: { redirectTo?: string }): P
     throw error;
   }
 
-  if (!data?.url) {
-    throw new Error('No authorization URL returned from Supabase OAuth provider.');
-  }
-
-  let popupWindow: Window | null = null;
-  if (typeof window !== 'undefined') {
-    const width = 540;
-    const height = 680;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    popupWindow = window.open(
-      data.url,
-      'EagleExcelGoogleAuth',
-      `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
-    );
-
-    if (!popupWindow || popupWindow.closed || typeof popupWindow.closed === 'undefined') {
-      // If browser blocked popup, open in top-level new tab as fallback
-      popupWindow = window.open(data.url, '_blank');
-    }
+  // Fallback explicit navigation if runtime environment requires direct URL assignment
+  if (data?.url && typeof window !== 'undefined') {
+    window.location.href = data.url;
   }
 
   return {
-    url: data.url,
-    popup: popupWindow,
+    url: data?.url,
   };
 }
 

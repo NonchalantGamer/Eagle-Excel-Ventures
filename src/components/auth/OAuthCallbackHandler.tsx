@@ -47,13 +47,9 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
       user: sessionData.user,
     } : null;
 
-    const isVercel = typeof window !== 'undefined' && (
-      window.location.origin.includes('vercel.app') || 
-      window.location.hostname.includes('eagle-excel-ventures')
-    );
-    const targetHomeUrl = isVercel 
-      ? 'https://eagle-excel-ventures.vercel.app/#/' 
-      : (typeof window !== 'undefined' ? `${window.location.origin}/#/` : 'https://eagle-excel-ventures.vercel.app/#/');
+    const targetHomeUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/#/` 
+      : 'https://eagle-excel-ventures.vercel.app/#/';
 
     // 1. PostMessage to window.opener if available
     try {
@@ -305,13 +301,9 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
       localStorage.setItem('eagle_excel_active_page_view', 'home');
     } catch (e) {}
 
-    const isVercel = typeof window !== 'undefined' && (
-      window.location.origin.includes('vercel.app') || 
-      window.location.hostname.includes('eagle-excel-ventures')
-    );
-    const targetHomeUrl = isVercel 
-      ? 'https://eagle-excel-ventures.vercel.app/#/' 
-      : (typeof window !== 'undefined' ? `${window.location.origin}/#/` : 'https://eagle-excel-ventures.vercel.app/#/');
+    const targetHomeUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/#/` 
+      : 'https://eagle-excel-ventures.vercel.app/#/';
 
     // 2. Attempt to notify and focus opener if this is a popup
     try {

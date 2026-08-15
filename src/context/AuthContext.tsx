@@ -446,55 +446,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!isSupabaseEnabled()) {
       throw new Error('Supabase authentication is not configured. Please enter your Supabase URL and Anon Key in Database Settings.');
     }
-    const { popup } = await loginWithGoogleOAuth(options);
-
-    // Active polling to detect login completion and automatically close popup
-    if (popup && typeof window !== 'undefined') {
-      const pollTimer = setInterval(async () => {
-        try {
-          const supabase = getSupabase();
-          if (supabase) {
-            const { data } = await supabase.auth.getSession();
-            if (data.session?.user) {
-              clearInterval(pollTimer);
-              const mapped = toAppUser(data.session.user);
-              if (mapped) {
-                setCurrentUser(mapped);
-                await ensureProfileDocument(mapped);
-              }
-              try {
-                if (popup && !popup.closed) {
-                  popup.close();
-                }
-              } catch (e) {}
-              try {
-                window.focus();
-              } catch (e) {}
-              return;
-            }
-          }
-
-          if (popup.closed) {
-            clearInterval(pollTimer);
-            const supabase = getSupabase();
-            if (supabase) {
-              const { data } = await supabase.auth.getSession();
-              if (data.session?.user) {
-                const mapped = toAppUser(data.session.user);
-                if (mapped) {
-                  setCurrentUser(mapped);
-                  await ensureProfileDocument(mapped);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          // Ignore
-        }
-      }, 500);
-
-      setTimeout(() => clearInterval(pollTimer), 120000);
-    }
+    await loginWithGoogleOAuth(options);
   };
 
   const sendPasswordResetEmail = async (email: string): Promise<void> => {

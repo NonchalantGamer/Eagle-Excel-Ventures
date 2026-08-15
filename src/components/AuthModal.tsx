@@ -147,8 +147,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (!isSupabaseEnabled()) {
         throw new Error('Supabase authentication service is currently unavailable. Please try email login or contact support.');
       }
+      setSuccessMsg('Redirecting to Google Sign-In...');
       await loginWithGoogle();
-      setSuccessMsg('Google sign-in popup opened. Please complete authentication in the popup window.');
     } catch (err: any) {
       console.error('Google Sign In Error:', err);
       const parsed = parseAuthErrorMessage(err);
