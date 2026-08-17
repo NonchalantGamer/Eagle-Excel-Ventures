@@ -28,7 +28,7 @@ import { getBrandLogo } from '../constants/branding';
 import { useToast } from './Toast';
 import { createOrderInDatabase } from '../services/orderService';
 import { initiateFlutterwavePayment, verifyFlutterwaveTransaction } from '../services/flutterwave';
-import { Order, OrderItem, PaymentMethod } from '../types';
+import { Order, OrderItem, PaymentMethod, CartItem } from '../types';
 import { useModalFocusLock } from '../hooks/useModalFocusLock';
 
 interface CheckoutModalProps {
@@ -36,6 +36,13 @@ interface CheckoutModalProps {
   onClose: () => void;
   onOrderSuccess: (order: Order) => void;
   onOpenAuth: () => void;
+  checkoutData?: {
+    items: CartItem[];
+    subtotal: number;
+    shippingCost: number;
+    tax: number;
+    total: number;
+  } | null;
 }
 
 type CheckoutStep = 'form' | 'processing' | 'verifying' | 'confirmed';
@@ -44,9 +51,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   isOpen,
   onClose,
   onOrderSuccess,
-  onOpenAuth
+  onOpenAuth,
+  checkoutData
 }) => {
-  const { items, subtotal, shippingCost, tax, total, clearCart } = useCart();
+  const { items: cartItems, subtotal: cartSubtotal, shippingCost: cartShippingCost, total: cartTotal, clearCart } = useCart();
+  
+  // Use checkoutData snapshot if provided, otherwise fallback to cart context
+  const items = checkoutData?.items ?? cartItems;
+  const subtotal = checkoutData?.subtotal ?? cartSubtotal;
+  const shippingCost = checkoutData?.shippingCost ?? cartShippingCost;
+  const tax = checkoutData?.tax ?? 0;
+  const total = checkoutData?.total ?? cartTotal;
   const { currentUser, userProfile } = useAuth();
   const { formatPrice, convertPrice, currency: currentCurrency } = useCurrency();
   const { isDark } = useTheme();

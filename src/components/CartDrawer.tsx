@@ -19,7 +19,7 @@ import {
 import { useCart } from '../context/CartContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { CheckoutModal } from './CheckoutModal';
-import { Order } from '../types';
+import { Order, CartItem } from '../types';
 import { useToast } from './Toast';
 import { useModalFocusLock } from '../hooks/useModalFocusLock';
 
@@ -47,10 +47,41 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isExportingQuote, setIsExportingQuote] = useState(false);
+  const [checkoutData, setCheckoutData] = useState<{
+    items: CartItem[];
+    subtotal: number;
+    shippingCost: number;
+    tax: number;
+    total: number;
+  } | null>(null);
 
   useModalFocusLock(isCartOpen, () => setIsCartOpen(false));
 
-  if (!isCartOpen) return null;
+  const handleProceedToCheckout = () => {
+    if (items.length === 0) {
+      showToast('Your wholesale cart is empty.', 'error');
+      return;
+    }
+
+    // 1. Snapshot cart data before clearing
+    const currentCheckoutData = {
+      items: [...items],
+      subtotal,
+      shippingCost,
+      tax: 0,
+      total
+    };
+    setCheckoutData(currentCheckoutData);
+
+    // 2. Clear the cart immediately so no items are left there
+    clearCart();
+
+    // 3. Open the checkout modal and close the cart drawer
+    setIsCheckoutOpen(true);
+    setIsCartOpen(false);
+  };
+
+  if (!isCartOpen && !isCheckoutOpen) return null;
 
   const freeShippingThreshold = 1500;
   const progressToFreeShipping = Math.min(100, Math.round((subtotal / freeShippingThreshold) * 100));
@@ -184,7 +215,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
 
   return (
     <>
-      {typeof document !== 'undefined' && createPortal(
+      {isCartOpen && typeof document !== 'undefined' && createPortal(
         <div data-portal-modal="true" className="fixed inset-0 z-[99990] isolate overflow-hidden">
           {/* Backdrop */}
           <div 
@@ -372,7 +403,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
                 {/* Primary Action Button */}
                 <button
                   type="button"
-                  onClick={() => setIsCheckoutOpen(true)}
+                  onClick={handleProceedToCheckout}
                   className="w-full py-3 px-4 rounded-xl btn-primary-morphic text-black font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 btn-hover cursor-pointer"
                 >
                   <ShieldCheck className="w-4 h-4 text-black stroke-[2.5]" />
@@ -420,10 +451,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
         isOpen={isCheckoutOpen}
         onClose={() => {
           setIsCheckoutOpen(false);
-          setIsCartOpen(false);
+          setCheckoutData(null);
         }}
-        onOrderSuccess={onOrderSuccess}
+        onOrderSuccess={(order) => {
+          setIsCheckoutOpen(false);
+          setCheckoutData(null);
+          onOrderSuccess(order);
+        }}
         onOpenAuth={onOpenAuth}
+        checkoutData={checkoutData}
       />
     </>
   );
