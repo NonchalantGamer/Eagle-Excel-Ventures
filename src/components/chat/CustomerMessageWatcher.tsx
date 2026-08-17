@@ -44,15 +44,14 @@ export const CustomerMessageWatcher: React.FC<CustomerMessageWatcherProps> = ({
     onOpenSupportRef.current = onOpenSupport;
   }, [onOpenSupport]);
 
-  // Determine active customer ID (authenticated customer or guest)
+  // Determine active customer ID (only for authenticated customer)
   const activeCustomerId = currentUser && !isAdmin
-    ? (currentUser.uid || currentUser.id || getGuestOrActiveCustomerId(currentUser))
-    : getGuestOrActiveCustomerId(currentUser);
+    ? (currentUser.uid || currentUser.id || null)
+    : null;
 
   useEffect(() => {
-    // If the active user is an admin viewing admin dashboard, CustomerMessageWatcher does not interfere (AdminDashboard handles admin side)
-    if (isAdmin) return;
-    if (!activeCustomerId) return;
+    // If the active user is an admin or signed out, do not watch customer thread or trigger notifications
+    if (isAdmin || !currentUser || !activeCustomerId) return;
 
     const unsubscribe = subscribeToCustomerThread(activeCustomerId, (msgs: Message[]) => {
       if (!initialLoadedRef.current) {

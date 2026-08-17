@@ -189,7 +189,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#161616] border border-slate-200 dark:border-white/5 text-xs space-y-2 text-slate-600 dark:text-zinc-400">
                 <div className="flex items-center gap-2 font-medium text-slate-800 dark:text-zinc-200">
                   <Truck className="w-4 h-4 text-[#F27D26] shrink-0" />
-                  <span>Pallet Freight & Logistics Dispatch Verified</span>
+                  <span>Est. Freight Logistics: <strong className="text-slate-900 dark:text-zinc-100 font-bold">{typeof product.estimatedFreight === 'number' && product.estimatedFreight > 0 ? formatPrice(product.estimatedFreight) : 'Free Shipping'}</strong></span>
                 </div>
                 <div className="flex items-center gap-2 font-medium text-slate-800 dark:text-zinc-200">
                   <Award className="w-4 h-4 text-emerald-500 shrink-0" />

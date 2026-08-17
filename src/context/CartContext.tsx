@@ -123,10 +123,23 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = Number(items.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2));
-  // Freight rule: Free wholesale freight for orders over $1,500, else flat $45 pallet/freight rate
-  const shippingCost = subtotal > 1500 || subtotal === 0 ? 0 : 45.00;
-  const tax = Number((subtotal * 0.05).toFixed(2)); // Standard 5% B2B estimated tax
-  const total = Number((subtotal + shippingCost + tax).toFixed(2));
+  // Est freight shipping is decided by the admin per product rather than a fixed amount
+  const shippingCost = items.length === 0
+    ? 0
+    : Number(
+        items
+          .reduce((sum, item) => {
+            const itemFreight = typeof item.product.estimatedFreight === 'number'
+              ? item.product.estimatedFreight
+              : typeof item.product.freight === 'number'
+              ? item.product.freight
+              : 0;
+            return sum + itemFreight;
+          }, 0)
+          .toFixed(2)
+      );
+  const tax = 0; // Estimated tax removed per business requirements
+  const total = Number((subtotal + shippingCost).toFixed(2));
 
   return (
     <CartContext.Provider

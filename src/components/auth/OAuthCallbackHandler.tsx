@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, ArrowRight, Sparkles, AlertTriangle, User, RefreshCw } from 'lucide-react';
+import { Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 import { getSupabase, isSupabaseEnabled } from '../../lib/supabase';
 import { getBrandLogo } from '../../constants/branding';
 import { handlePostAuthProfileTrigger } from '../../services/postAuthTrigger';
@@ -26,11 +26,9 @@ interface OAuthCallbackHandlerProps {
 }
 
 export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onComplete }) => {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [authenticatedUser, setAuthenticatedUser] = useState<any>(null);
-  const [countdown, setCountdown] = useState<number>(3);
-  const [isDark, setIsDark] = useState<boolean>(() => {
+  const [isDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('eev_theme');
       return stored === 'dark' || (stored !== 'light' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
@@ -38,7 +36,40 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
     return true;
   });
 
-  const notifyParentAndClose = (sessionData?: any) => {
+  const handleReturnToWebsite = () => {
+    // 1. Clear window.name and popup state
+    try {
+      window.name = '';
+      sessionStorage.removeItem('ee_is_oauth_popup');
+      localStorage.setItem('eagle_excel_active_page_view', 'home');
+    } catch (e) {}
+
+    const targetHomeUrl = typeof window !== 'undefined' 
+      ? `${window.location.origin}/#/` 
+      : 'https://eagle-excel-ventures.vercel.app/#/';
+
+    // 2. Clean URL history state to root homescreen
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, targetHomeUrl);
+      }
+    } catch {}
+
+    // 3. Transition directly in-place without closing the tab or reloading
+    if (onComplete) {
+      onComplete();
+      return;
+    }
+
+    // 4. Fallback navigation
+    try {
+      window.location.hash = '#/';
+    } catch (e) {
+      window.location.href = targetHomeUrl;
+    }
+  };
+
+  const notifyParentAndSync = (sessionData?: any) => {
     const user = sessionData?.user;
     const serializableSession = sessionData ? {
       access_token: sessionData.access_token,
@@ -51,7 +82,7 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
       ? `${window.location.origin}/#/` 
       : 'https://eagle-excel-ventures.vercel.app/#/';
 
-    // 1. PostMessage to window.opener if available
+    // 1. PostMessage to window.opener if available (never close window)
     try {
       if (window.opener && !window.opener.closed) {
         window.opener.postMessage({ 
@@ -137,15 +168,12 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
   };
 
   useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
     let authUnsubscribe: (() => void) | null = null;
     let isFinished = false;
 
     const onAuthSuccess = async (session: any) => {
       if (isFinished || !session?.user) return;
       isFinished = true;
-
-      setAuthenticatedUser(session.user);
 
       // Trigger post-auth user profile initialization and database upsert in background
       try {
@@ -155,9 +183,9 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
       }
 
       // Notify parent window, cross-tab channels, and storage
-      notifyParentAndClose(session);
+      notifyParentAndSync(session);
 
-      // Immediately return directly back to the website without displaying a welcome card or countdown delay
+      // Immediately return directly back to the website without displaying a welcome card or popup
       handleReturnToWebsite();
     };
 
@@ -257,51 +285,9 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
     processAuth();
 
     return () => {
-      if (timer) clearInterval(timer);
       if (authUnsubscribe) authUnsubscribe();
     };
   }, []);
-
-  const handleReturnToWebsite = () => {
-    // 1. Clear window.name and popup state
-    try {
-      window.name = '';
-      sessionStorage.removeItem('ee_is_oauth_popup');
-      localStorage.setItem('eagle_excel_active_page_view', 'home');
-    } catch (e) {}
-
-    const targetHomeUrl = typeof window !== 'undefined' 
-      ? `${window.location.origin}/#/` 
-      : 'https://eagle-excel-ventures.vercel.app/#/';
-
-    // 2. Clean URL history state to root homescreen
-    try {
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState({}, document.title, targetHomeUrl);
-      }
-    } catch {}
-
-    // 3. If callback prop provided, transition directly in-place without page reload
-    if (onComplete) {
-      onComplete();
-      return;
-    }
-
-    // 4. Fallback navigation
-    try {
-      window.location.hash = '#/';
-    } catch (e) {
-      window.location.href = targetHomeUrl;
-    }
-  };
-
-  const userDisplayName = authenticatedUser?.user_metadata?.full_name || 
-    authenticatedUser?.user_metadata?.name || 
-    authenticatedUser?.email?.split('@')[0] || 
-    'Wholesale Partner';
-
-  const userAvatar = authenticatedUser?.user_metadata?.avatar_url || 
-    authenticatedUser?.user_metadata?.picture;
 
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 ${isDark ? 'dark bg-[#0a0a0a] text-zinc-100' : 'bg-slate-50 text-slate-900'} font-sans select-none antialiased`}>
@@ -327,60 +313,13 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
         {/* Status: Loading */}
         {status === 'loading' && (
           <div className="space-y-4 py-4">
-            <div className="w-14 h-14 border-4 border-[#F27D26] border-t-transparent rounded-full animate-spin mx-auto shadow-md" />
-            <h2 className="text-lg font-bold font-serif text-slate-900 dark:text-white">
-              Completing Google Authentication...
+            <div className="w-12 h-12 border-4 border-[#F27D26] border-t-transparent rounded-full animate-spin mx-auto shadow-md" />
+            <h2 className="text-base font-bold font-serif text-slate-900 dark:text-white">
+              Signing in to Wholesale Portal...
             </h2>
             <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-xs mx-auto">
-              Securing your session with Eagle Excel. Please wait a moment...
+              Redirecting you directly back to Eagle Excel...
             </p>
-          </div>
-        )}
-
-        {/* Status: Success */}
-        {status === 'success' && (
-          <div className="space-y-5 py-2 animate-fadeIn">
-            <div className="w-16 h-16 bg-emerald-500/20 text-emerald-500 rounded-full mx-auto flex items-center justify-center border border-emerald-500/30 shadow-lg">
-              <CheckCircle2 className="w-9 h-9" />
-            </div>
-            
-            <div className="space-y-1.5">
-              <h2 className="text-xl font-bold font-serif text-slate-900 dark:text-white">
-                Sign-In Successful!
-              </h2>
-              <p className="text-xs text-slate-600 dark:text-zinc-300 max-w-xs mx-auto leading-relaxed">
-                Welcome back, <span className="font-bold text-[#F27D26]">{userDisplayName}</span>. Your session has been verified.
-              </p>
-            </div>
-
-            {/* Authenticated User Preview Card */}
-            {authenticatedUser && (
-              <div className="p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 flex items-center gap-3 text-left">
-                {userAvatar ? (
-                  <img src={userAvatar} alt={userDisplayName} className="w-10 h-10 rounded-xl object-cover ring-2 ring-[#F27D26]/40" />
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-[#F27D26]/20 text-[#F27D26] flex items-center justify-center font-bold">
-                    <User className="w-5 h-5" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white truncate">{userDisplayName}</div>
-                  <div className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{authenticatedUser.email}</div>
-                </div>
-              </div>
-            )}
-
-            <div className="p-3 bg-slate-100 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 text-xs text-slate-500 dark:text-zinc-400">
-              Returning you to Eagle Excel homescreen in <span className="font-bold text-[#F27D26]">{countdown}s</span>...
-            </div>
-
-            <button
-              onClick={handleReturnToWebsite}
-              className="w-full btn-primary-morphic text-black font-extrabold py-3.5 px-6 rounded-2xl flex items-center justify-center gap-2 text-sm shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-            >
-              <span>Return to Homescreen</span>
-              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-            </button>
           </div>
         )}
 
@@ -422,7 +361,7 @@ export const OAuthCallbackHandler: React.FC<OAuthCallbackHandlerProps> = ({ onCo
                 onClick={handleReturnToWebsite}
                 className="w-full py-3 px-6 rounded-2xl bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-bold text-xs transition-colors cursor-pointer"
               >
-                Close & Return to Homescreen
+                Return to Website
               </button>
             </div>
           </div>

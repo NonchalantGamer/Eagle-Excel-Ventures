@@ -136,30 +136,26 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
             </tbody>
           </table>
 
-          <div class="totals">
-            <div class="totals-row">
-              <span>Subtotal:</span>
-              <strong>${formatPrice(subtotal)}</strong>
-            </div>
-            ${totalVolumeSavings > 0 ? `
-              <div class="totals-row" style="color: #16a34a;">
-                <span>Volume Tier Savings:</span>
-                <strong>-${formatPrice(totalVolumeSavings)}</strong>
+            <div class="totals">
+              <div class="totals-row">
+                <span>Subtotal:</span>
+                <strong>${formatPrice(subtotal)}</strong>
               </div>
-            ` : ''}
-            <div class="totals-row">
-              <span>Freight Shipping:</span>
-              <strong>${shippingCost === 0 ? 'FREE' : formatPrice(shippingCost)}</strong>
+              ${totalVolumeSavings > 0 ? `
+                <div class="totals-row" style="color: #16a34a;">
+                  <span>Volume Tier Savings:</span>
+                  <strong>-${formatPrice(totalVolumeSavings)}</strong>
+                </div>
+              ` : ''}
+              <div class="totals-row">
+                <span>Est. Freight Shipping:</span>
+                <strong>${shippingCost === 0 ? 'FREE' : formatPrice(shippingCost)}</strong>
+              </div>
+              <div class="totals-row totals-grand">
+                <span>Estimated Total:</span>
+                <span>${formatPrice(total)}</span>
+              </div>
             </div>
-            <div class="totals-row">
-              <span>Estimated Tax:</span>
-              <strong>${formatPrice(tax)}</strong>
-            </div>
-            <div class="totals-row totals-grand">
-              <span>Estimated Total:</span>
-              <span>${formatPrice(total)}</span>
-            </div>
-          </div>
 
           <div class="terms">
             <strong>Terms & Notes:</strong><br/>
@@ -222,27 +218,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
               </button>
             </div>
 
-            {/* Free Freight Bar */}
-            <div className="bg-slate-100 dark:bg-[#161616] px-4 py-3 border-b border-slate-200 dark:border-white/5 text-xs">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
-                  <Truck className="w-3.5 h-3.5 text-[#F27D26]" />
-                  {amountToFreeShipping > 0 ? (
-                    <>Add <strong className="text-slate-900 dark:text-zinc-100 font-bold">{formatPrice(amountToFreeShipping)}</strong> for Free Freight</>
-                  ) : (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">Qualified for FREE Pallet Freight!</span>
-                  )}
-                </span>
-                <span className="font-mono text-slate-500 dark:text-zinc-500 font-bold">{progressToFreeShipping}%</span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-1.5 overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-500 ${
-                    progressToFreeShipping >= 100 ? 'bg-emerald-500' : 'bg-[#F27D26]'
-                  }`}
-                  style={{ width: `${progressToFreeShipping}%` }}
-                />
-              </div>
+            {/* Freight Info Bar */}
+            <div className="bg-slate-100 dark:bg-[#161616] px-4 py-2.5 border-b border-slate-200 dark:border-white/5 text-xs flex items-center justify-between">
+              <span className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                <Truck className="w-3.5 h-3.5 text-[#F27D26]" />
+                Est. Freight Logistics:
+              </span>
+              <span className="font-bold text-slate-900 dark:text-zinc-100">
+                {shippingCost === 0 ? (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">FREE FREIGHT</span>
+                ) : (
+                  formatPrice(shippingCost)
+                )}
+              </span>
             </div>
 
             {/* Total Bulk Savings Banner */}
@@ -374,10 +362,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
                     <span className="font-semibold text-slate-900 dark:text-zinc-200">
                       {shippingCost === 0 ? <strong className="text-emerald-600 dark:text-emerald-400 font-bold">FREE</strong> : formatPrice(shippingCost)}
                     </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600 dark:text-zinc-400">
-                    <span>Est. Tax (5%):</span>
-                    <span className="font-semibold text-slate-900 dark:text-zinc-200">{formatPrice(tax)}</span>
                   </div>
                   <div className="pt-2 border-t border-slate-200 dark:border-white/5 flex justify-between text-sm font-bold text-slate-900 dark:text-zinc-100">
                     <span>Grand Total:</span>

@@ -364,6 +364,11 @@ export function subscribeToNotifications(
   userId: string | null,
   callback: (notifications: AppNotification[]) => void
 ): () => void {
+  if (!userId) {
+    callback([]);
+    return () => {};
+  }
+
   let isSubscribed = true;
 
   const filterForUser = (items: AppNotification[]): AppNotification[] => {

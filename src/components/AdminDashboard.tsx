@@ -210,6 +210,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [formSku, setFormSku] = useState('');
   const [formCategory, setFormCategory] = useState('electronics');
   const [formPrice, setFormPrice] = useState('49.99');
+  const [formFreight, setFormFreight] = useState('25.00');
   const [formStock, setFormStock] = useState('250');
   const [formMoq, setFormMoq] = useState('10');
   const [formUnit, setFormUnit] = useState('Master Carton (10 Units)');
@@ -453,6 +454,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       setFormSku(product.sku);
       setFormCategory(product.category);
       setFormPrice(product.price.toString());
+      setFormFreight(product.estimatedFreight !== undefined ? product.estimatedFreight.toString() : '25.00');
       setFormStock(product.stock.toString());
       setFormMoq(product.minOrderQty.toString());
       setFormUnit(product.unit);
@@ -465,6 +467,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       setFormSku(`EE-${Math.floor(100 + Math.random() * 900)}`);
       setFormCategory('electronics');
       setFormPrice('45.00');
+      setFormFreight('25.00');
       setFormStock('500');
       setFormMoq('10');
       setFormUnit('Master Carton (10 Units)');
@@ -496,6 +499,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       return;
     }
 
+    const freightNum = parseFloat(formFreight);
+    const validFreight = !isNaN(freightNum) && freightNum >= 0 ? freightNum : 0;
+
     const stockNum = parseInt(formStock);
     if (isNaN(stockNum) || stockNum < 0) {
       showToast('Please provide a valid stock quantity.', 'error');
@@ -523,6 +529,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       sku: formSku.trim().toUpperCase(),
       category: formCategory,
       price: priceNum,
+      estimatedFreight: validFreight,
       stock: stockNum,
       minOrderQty: moqNum,
       unit: formUnit.trim() || 'Master Carton (10 Units)',
@@ -2196,6 +2203,19 @@ VITE_SUPABASE_ANON_KEY=your-supabase-anon-key`}
                 </div>
 
                 <div>
+                  <label className="block font-semibold text-zinc-300 mb-1">Est. Freight Shipping ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formFreight}
+                    onChange={e => setFormFreight(e.target.value)}
+                    placeholder="25.00"
+                    className="w-full p-2.5 bg-white/5 border border-white/10 text-zinc-100 rounded-xl focus:border-[#F27D26] outline-none font-bold placeholder-zinc-600"
+                  />
+                </div>
+
+                <div>
                   <label className="block font-semibold text-zinc-300 mb-1">Packaging Unit Format</label>
                   <input
                     type="text"
@@ -2524,8 +2544,7 @@ VITE_SUPABASE_ANON_KEY=your-supabase-anon-key`}
 
                 <div className="w-64 space-y-1 bg-[#161616] p-3 rounded-xl border border-white/5 text-zinc-300">
                   <div className="flex justify-between"><span>Subtotal:</span><strong className="text-zinc-100">${selectedOrder.subtotal.toFixed(2)}</strong></div>
-                  <div className="flex justify-between"><span>Freight:</span><strong className="text-zinc-100">${selectedOrder.shippingCost.toFixed(2)}</strong></div>
-                  <div className="flex justify-between"><span>Tax:</span><strong className="text-zinc-100">${selectedOrder.tax.toFixed(2)}</strong></div>
+                  <div className="flex justify-between"><span>Est. Freight:</span><strong className="text-zinc-100">${selectedOrder.shippingCost.toFixed(2)}</strong></div>
                   <div className="pt-1 border-t border-white/10 flex justify-between font-bold text-sm text-[#F27D26]">
                     <span>Total:</span><span>${selectedOrder.total.toFixed(2)}</span>
                   </div>

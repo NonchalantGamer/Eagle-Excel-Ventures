@@ -136,7 +136,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         items: orderItems,
         subtotal,
         shippingCost,
-        tax,
+        tax: 0,
         total,
         currency: currentCurrency || 'NGN',
         status: 'pending' as const,             // Order created
@@ -648,14 +648,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <span className="font-bold text-slate-900 dark:text-zinc-200">{formatPrice(subtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-600 dark:text-zinc-400">
-                <span>Freight / Pallet Shipping:</span>
+                <span>Est. Freight Logistics:</span>
                 <span className="font-semibold text-slate-900 dark:text-zinc-200">
                   {shippingCost === 0 ? <strong className="text-emerald-600 dark:text-emerald-400">FREE Freight</strong> : formatPrice(shippingCost)}
                 </span>
-              </div>
-              <div className="flex justify-between text-slate-600 dark:text-zinc-400">
-                <span>Estimated Tax (5% B2B):</span>
-                <span className="font-semibold text-slate-900 dark:text-zinc-200">{formatPrice(tax)}</span>
               </div>
               <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex justify-between text-sm font-extrabold text-slate-900 dark:text-zinc-100">
                 <span>Order Total Payable:</span>

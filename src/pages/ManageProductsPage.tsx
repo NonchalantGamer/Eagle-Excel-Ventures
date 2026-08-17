@@ -110,6 +110,7 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
   const [formPrice, setFormPrice] = useState('49.99');
   const [formStock, setFormStock] = useState('500');
   const [formMoq, setFormMoq] = useState('10');
+  const [formEstimatedFreight, setFormEstimatedFreight] = useState('25.00');
   const [formUnit, setFormUnit] = useState('Master Carton (10 Units)');
   const [formDesc, setFormDesc] = useState('');
   const [formIsFeatured, setFormIsFeatured] = useState(false);
@@ -224,6 +225,7 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
       setFormPrice(product.price.toString());
       setFormStock(product.stock.toString());
       setFormMoq(product.minOrderQty.toString());
+      setFormEstimatedFreight(product.estimatedFreight !== undefined ? product.estimatedFreight.toString() : '25.00');
       setFormUnit(product.unit);
       setFormDesc(product.description);
       setFormIsFeatured(product.isFeatured || false);
@@ -248,6 +250,7 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
       setFormPrice('45.00');
       setFormStock('500');
       setFormMoq('10');
+      setFormEstimatedFreight('25.00');
       setFormUnit('Master Carton (10 Units)');
       setFormDesc('High-grade commercial wholesale inventory item manufactured for enterprise distribution in West Africa.');
       setFormIsFeatured(false);
@@ -373,6 +376,9 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
       return;
     }
 
+    const freightNum = parseFloat(formEstimatedFreight);
+    const validFreight = !isNaN(freightNum) && freightNum >= 0 ? freightNum : 0;
+
     const finalCategory = formCategory === 'custom' ? ((customCategory || '').trim() || 'General Wholesale') : formCategory;
 
     // Convert specs array to Record<string, string>
@@ -413,6 +419,7 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
         'Compliance': 'Standard ISO9001 Commercial',
         'Lead Time': '1-3 Business Days Freight Dispatch'
       },
+      estimatedFreight: validFreight,
       isFeatured: formIsFeatured
     };
 
@@ -1071,6 +1078,9 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
                         <span className="text-[10px] text-slate-400 dark:text-zinc-500 block truncate max-w-[130px]">
                           {product.unit}
                         </span>
+                        <span className="inline-block mt-0.5 text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                          Freight: {typeof product.estimatedFreight === 'number' ? `$${product.estimatedFreight.toFixed(2)}` : '$0.00'}
+                        </span>
                       </td>
 
                       {/* Actions */}
@@ -1251,8 +1261,8 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
                 </div>
               </div>
 
-              {/* Row 3: Price, Stock, MOQ, Packaging Unit */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* Row 3: Price, Est. Freight, Stock, MOQ, Packaging Unit */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1.5">
                     Base Price ($ USD) *
@@ -1267,6 +1277,24 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
                       value={formPrice}
                       onChange={e => setFormPrice(e.target.value)}
                       placeholder="49.99"
+                      className="w-full pl-7 pr-3 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-zinc-100 rounded-xl focus:ring-2 focus:ring-[#F27D26] outline-none font-bold placeholder:text-slate-400 dark:placeholder:text-zinc-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1.5">
+                    Est. Freight ($ USD)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formEstimatedFreight}
+                      onChange={e => setFormEstimatedFreight(e.target.value)}
+                      placeholder="25.00"
                       className="w-full pl-7 pr-3 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-zinc-100 rounded-xl focus:ring-2 focus:ring-[#F27D26] outline-none font-bold placeholder:text-slate-400 dark:placeholder:text-zinc-600"
                     />
                   </div>
@@ -1302,7 +1330,7 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
                   />
                 </div>
 
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                   <label className="block font-bold text-slate-700 dark:text-zinc-300 mb-1.5">
                     Packaging Unit
                   </label>

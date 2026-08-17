@@ -68,6 +68,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'electronics',
     description: 'Premium enterprise-grade hybrid ANC wireless headphones with 45-hour battery life, dual omnidirectional noise-suppression microphones, and multi-device Bluetooth 5.3 pairing. Packaged for retail distribution across Nigeria and Cameroon with retail-ready packaging and barcode labeling.',
     price: 48.00,
+    estimatedFreight: 25.00,
     wholesaleTiers: [
       { minQty: 10, pricePerUnit: 48.00, discountPercentage: 0 },
       { minQty: 50, pricePerUnit: 42.50, discountPercentage: 11 },
@@ -102,6 +103,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'electronics',
     description: 'Commercial video conferencing bar with 4K Sony CMOS sensor, 120-degree wide angle optical lens, AI facial auto-tracking, and integrated 5W beamforming speakerphone for commercial boardrooms, remote hubs, and government agencies.',
     price: 135.00,
+    estimatedFreight: 20.00,
     wholesaleTiers: [
       { minQty: 4, pricePerUnit: 135.00, discountPercentage: 0 },
       { minQty: 20, pricePerUnit: 118.00, discountPercentage: 12 },
@@ -135,6 +137,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'electronics',
     description: 'Industrial grade 5.5KVA 48V pure sine wave hybrid solar inverter with built-in 100A MPPT charge controller, dual AC outputs for smart load management, Wi-Fi remote monitoring module, and high-surge generator compatibility tailored for West African power grids.',
     price: 380.00,
+    estimatedFreight: 45.00,
     wholesaleTiers: [
       { minQty: 2, pricePerUnit: 380.00, discountPercentage: 0 },
       { minQty: 10, pricePerUnit: 335.00, discountPercentage: 12 },
@@ -170,6 +173,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'building',
     description: 'Heavy duty contractor grade 20V Max brushless combo kit. Delivers up to 650 in-lbs of torque with two 4.0Ah high-density lithium-ion batteries, fast smart charger, and rugged ballistics carrying case. Designed for high-volume trade contractors and hardware retailers in Nigeria & Cameroon.',
     price: 89.00,
+    estimatedFreight: 30.00,
     wholesaleTiers: [
       { minQty: 5, pricePerUnit: 89.00, discountPercentage: 0 },
       { minQty: 25, pricePerUnit: 78.00, discountPercentage: 12 },
@@ -203,6 +207,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'building',
     description: 'High-density polyethylene (HDPE) vented industrial hard hats with 6-point suspension nylon webbing and micro-adjust ratchet knob. Features universal accessory slots for earmuffs and face shields. Ideal for construction sites, logistics hubs, and manufacturing facilities across West Africa.',
     price: 14.50,
+    estimatedFreight: 18.00,
     wholesaleTiers: [
       { minQty: 24, pricePerUnit: 14.50, discountPercentage: 0 },
       { minQty: 100, pricePerUnit: 11.80, discountPercentage: 18 },
@@ -235,6 +240,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'building',
     description: 'Armored multi-lock anti-theft commercial security entrance doors. Heavy 1.2mm cold-rolled steel frame, 13-point multi-directional locking deadbolts, fire-resistant honeycomb core filling, and stainless steel sill plate. Shipped flat with pre-hung frames for real estate developers and building material merchants.',
     price: 145.00,
+    estimatedFreight: 65.00,
     wholesaleTiers: [
       { minQty: 10, pricePerUnit: 145.00, discountPercentage: 0 },
       { minQty: 40, pricePerUnit: 125.00, discountPercentage: 14 },
@@ -269,6 +275,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'textiles',
     description: '100% combed Egyptian cotton luxury Swiss voile lace and brocade jacquard weave fabric. Features vibrant colorfast dyeing, intricate metallic embroidery patterns, and soft breathable finish. Highly demanded across Nigerian traditional wedding seasons and Cameroonian ceremonial markets.',
     price: 95.00,
+    estimatedFreight: 22.00,
     wholesaleTiers: [
       { minQty: 5, pricePerUnit: 95.00, discountPercentage: 0 },
       { minQty: 25, pricePerUnit: 82.00, discountPercentage: 14 },
@@ -301,6 +308,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'textiles',
     description: '100% premium grade cotton block-printed African wax Ankara fabric. Double-sided color penetration, anti-fading reactive dyes, and authentic traditional and contemporary African geometric motifs. Sold in bales of 100 pieces for commercial textile merchants.',
     price: 8.50,
+    estimatedFreight: 15.00,
     wholesaleTiers: [
       { minQty: 50, pricePerUnit: 8.50, discountPercentage: 0 },
       { minQty: 200, pricePerUnit: 7.20, discountPercentage: 15 },
@@ -334,6 +342,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'machinery',
     description: 'Heavy gauge welded steel H-frame shop press designed for bearing removal, bushing pressing, metal bending, and automotive fabrication workshops. Includes multi-position bed pins, dual pressing plates, and liquid-filled pressure readout gauge.',
     price: 245.00,
+    estimatedFreight: 85.00,
     wholesaleTiers: [
       { minQty: 2, pricePerUnit: 245.00, discountPercentage: 0 },
       { minQty: 10, pricePerUnit: 215.00, discountPercentage: 12 },
@@ -367,6 +376,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'machinery',
     description: 'High-speed semi-automatic strapping and continuous carton taping machine engineered for logistics depots, agro-exporters, and manufacturing assembly lines. Straps up to 30 cartons per minute with heat-sealed polypropylene tension bands.',
     price: 320.00,
+    estimatedFreight: 110.00,
     wholesaleTiers: [
       { minQty: 1, pricePerUnit: 320.00, discountPercentage: 0 },
       { minQty: 5, pricePerUnit: 285.00, discountPercentage: 11 },
@@ -401,6 +411,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'packaging',
     description: 'Heavy duty ECT-32 test single-wall brown kraft shipping cartons. Shipped flat in bundled packs of 100. Perfect for e-commerce fulfillment warehouses, third-party logistics centers, and retail shipping operations across Nigeria and Cameroon.',
     price: 0.85,
+    estimatedFreight: 20.00,
     wholesaleTiers: [
       { minQty: 100, pricePerUnit: 0.85, discountPercentage: 0 },
       { minQty: 500, pricePerUnit: 0.68, discountPercentage: 20 },
@@ -433,6 +444,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'packaging',
     description: 'Commercial high-back breathable mesh office chair engineered for 12+ hours continuous commercial use. Features synchronous tilt-lock mechanism, adjustable lumbar curvature, and Class-4 heavy duty gas lift tested to 350 lbs BIFMA compliance.',
     price: 115.00,
+    estimatedFreight: 35.00,
     wholesaleTiers: [
       { minQty: 8, pricePerUnit: 115.00, discountPercentage: 0 },
       { minQty: 40, pricePerUnit: 98.00, discountPercentage: 15 },
@@ -443,7 +455,6 @@ export const INITIAL_PRODUCTS: Product[] = [
     minOrderQty: 8,
     unit: 'Pallet Tier (8 Units Knock-Down)',
     images: [
-      'https://images.unsplash.com/photo-1580481077197-047db33e8b09?w=800&auto=format&fit=crop&q=80',
       'https://images.unsplash.com/photo-1505797149-43b0069ec26b?w=800&auto=format&fit=crop&q=80'
     ],
     specs: {
@@ -465,6 +476,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     category: 'packaging',
     description: 'Heavy duty commercial motorized dual-motor desk legs with programmable LED digital memory handset, anti-collision sensor, and expandable crossbar accommodating 48" to 78" tabletops. Ideal for corporate fit-outs and furniture retailers.',
     price: 168.00,
+    estimatedFreight: 40.00,
     wholesaleTiers: [
       { minQty: 6, pricePerUnit: 168.00, discountPercentage: 0 },
       { minQty: 30, pricePerUnit: 145.00, discountPercentage: 13 },

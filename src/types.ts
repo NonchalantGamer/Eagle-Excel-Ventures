@@ -98,6 +98,8 @@ export interface Product {
   moq?: number; // alias for minOrderQty
   unit: string; // e.g., "Case (24 pcs)", "Box (50 units)", "Pallet", "Piece"
   packagingUnit?: string; // alias for unit
+  estimatedFreight?: number; // Admin-configured estimated freight shipping cost in USD
+  freight?: number; // alias for estimatedFreight
   images: string[]; // URLs of product photos
   image?: string; // primary image alias
   responsiveImages?: ResponsiveImageMap[]; // Optimized WebP multi-size variants
@@ -137,7 +139,7 @@ export interface Order {
   items: OrderItem[];
   subtotal: number;
   shippingCost: number;
-  tax: number;
+  tax?: number;
   total: number;
   status: OrderStatus;
   paymentStatus?: PaymentStatus;

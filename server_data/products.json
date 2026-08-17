@@ -47,7 +47,8 @@
     "isFeatured": true,
     "rating": 4.9,
     "reviewsCount": 142,
-    "createdAt": "2026-07-26T12:20:41.815Z"
+    "createdAt": "2026-07-26T12:20:41.815Z",
+    "estimatedFreight": 25
   },
   {
     "id": "prod_ee_06",
@@ -96,7 +97,8 @@
     "isFeatured": false,
     "rating": 4.9,
     "reviewsCount": 29,
-    "createdAt": "2026-08-05T12:20:41.815Z"
+    "createdAt": "2026-08-05T12:20:41.815Z",
+    "estimatedFreight": 20
   },
   {
     "id": "prod_ee_09",
@@ -145,7 +147,8 @@
     "isFeatured": true,
     "rating": 5,
     "reviewsCount": 88,
-    "createdAt": "2026-08-07T12:20:41.815Z"
+    "createdAt": "2026-08-07T12:20:41.815Z",
+    "estimatedFreight": 45
   },
   {
     "id": "prod_ee_02",
@@ -194,7 +197,8 @@
     "isFeatured": true,
     "rating": 4.8,
     "reviewsCount": 89,
-    "createdAt": "2026-07-29T12:20:41.815Z"
+    "createdAt": "2026-07-29T12:20:41.815Z",
+    "estimatedFreight": 30
   },
   {
     "id": "prod_ee_04",
@@ -242,7 +246,8 @@
     "isFeatured": false,
     "rating": 4.7,
     "reviewsCount": 38,
-    "createdAt": "2026-08-02T12:20:41.815Z"
+    "createdAt": "2026-08-02T12:20:41.815Z",
+    "estimatedFreight": 18
   },
   {
     "id": "prod_ee_10",
@@ -290,7 +295,8 @@
     "isFeatured": true,
     "rating": 4.9,
     "reviewsCount": 45,
-    "createdAt": "2026-08-09T12:20:41.815Z"
+    "createdAt": "2026-08-09T12:20:41.815Z",
+    "estimatedFreight": 65
   },
   {
     "id": "prod_ee_11",
@@ -338,7 +344,8 @@
     "isFeatured": true,
     "rating": 5,
     "reviewsCount": 76,
-    "createdAt": "2026-08-04T12:20:41.815Z"
+    "createdAt": "2026-08-04T12:20:41.815Z",
+    "estimatedFreight": 22
   },
   {
     "id": "prod_ee_12",
@@ -385,7 +392,8 @@
     "isFeatured": false,
     "rating": 4.8,
     "reviewsCount": 51,
-    "createdAt": "2026-08-06T12:20:41.815Z"
+    "createdAt": "2026-08-06T12:20:41.815Z",
+    "estimatedFreight": 15
   },
   {
     "id": "prod_ee_07",
@@ -434,7 +442,8 @@
     "isFeatured": false,
     "rating": 4.8,
     "reviewsCount": 17,
-    "createdAt": "2026-08-06T12:20:41.815Z"
+    "createdAt": "2026-08-06T12:20:41.815Z",
+    "estimatedFreight": 85
   },
   {
     "id": "prod_ee_13",
@@ -482,7 +491,8 @@
     "isFeatured": true,
     "rating": 4.9,
     "reviewsCount": 22,
-    "createdAt": "2026-08-03T12:20:41.815Z"
+    "createdAt": "2026-08-03T12:20:41.815Z",
+    "estimatedFreight": 110
   },
   {
     "id": "prod_ee_05",
@@ -530,7 +540,8 @@
     "isFeatured": false,
     "rating": 4.8,
     "reviewsCount": 52,
-    "createdAt": "2026-08-03T12:20:41.815Z"
+    "createdAt": "2026-08-03T12:20:41.815Z",
+    "estimatedFreight": 20
   },
   {
     "id": "prod_ee_03",
@@ -578,7 +589,8 @@
     "isFeatured": true,
     "rating": 4.9,
     "reviewsCount": 64,
-    "createdAt": "2026-07-31T12:20:41.815Z"
+    "createdAt": "2026-07-31T12:20:41.815Z",
+    "estimatedFreight": 35
   },
   {
     "id": "prod_ee_08",
@@ -625,6 +637,7 @@
     "isFeatured": false,
     "rating": 4.9,
     "reviewsCount": 71,
-    "createdAt": "2026-08-08T12:20:41.815Z"
+    "createdAt": "2026-08-08T12:20:41.815Z",
+    "estimatedFreight": 40
   }
 ]

@@ -734,12 +734,8 @@ export const CustomerDashboard: React.FC = () => {
                     <span className="font-bold text-slate-900 dark:text-zinc-200">{formatPrice(selectedOrder.subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-slate-600 dark:text-zinc-400">
-                    <span>Freight / Shipping:</span>
+                    <span>Est. Freight Logistics:</span>
                     <span className="font-semibold text-slate-900 dark:text-zinc-200">{formatPrice(selectedOrder.shippingCost)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600 dark:text-zinc-400">
-                    <span>Estimated Tax (5%):</span>
-                    <span className="font-semibold text-slate-900 dark:text-zinc-200">{formatPrice(selectedOrder.tax)}</span>
                   </div>
                   <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex justify-between font-extrabold text-sm text-slate-900 dark:text-zinc-100">
                     <span>Total Invoiced:</span>
