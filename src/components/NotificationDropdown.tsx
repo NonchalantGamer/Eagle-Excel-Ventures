@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Bell, 
+  BellRing,
+  BellOff,
   Check, 
   CheckCheck, 
   Trash2, 
@@ -44,6 +46,10 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
     setSoundEnabled, 
     importantOnly,
     setImportantOnly,
+    browserPermission,
+    browserNotificationsEnabled,
+    setBrowserNotificationsEnabled,
+    requestBrowserPermission,
     markAsRead, 
     markAllAsRead, 
     markThreadNotificationsAsRead,
@@ -225,36 +231,43 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
 
   return (
     <>
-      {/* Full-Screen Backdrop Overlay with Blur & Interaction Lock */}
+      {/* Full-Screen Backdrop Overlay with Blur & Interaction Lock (positioned below header) */}
       {isOpen && (
         <div
           id="notification-backdrop-overlay"
           onClick={() => setIsOpen(false)}
           aria-hidden="true"
-          className="fixed inset-0 z-40 bg-slate-950/45 dark:bg-black/65 backdrop-blur-md transition-all duration-300 animate-in fade-in"
+          className="fixed inset-0 top-14 sm:top-16 z-40 bg-slate-950/45 dark:bg-black/65 backdrop-blur-md transition-all duration-300 animate-in fade-in cursor-pointer"
         />
       )}
 
       <div className={`relative ${className} ${isOpen ? 'z-50' : ''}`} id="notification-dropdown-wrapper" ref={dropdownRef}>
-        {/* Bell Trigger Button */}
+        {/* Bell / Close Trigger Button */}
         <button
           id="notification-bell-btn"
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          aria-label="View notifications"
+          aria-label={isOpen ? "Close notifications" : "View notifications"}
           aria-expanded={isOpen}
+          title={isOpen ? "Close notifications (Exit)" : "View notifications"}
           className={`relative p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl transition-all cursor-pointer flex items-center justify-center group shrink-0 ${
             isOpen
               ? 'bg-[#F27D26]/20 text-[#F27D26] ring-2 ring-[#F27D26]/50 shadow-md z-50'
               : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-zinc-200'
           }`}
         >
-          <Bell className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:rotate-12 ${isOpen ? 'text-[#F27D26]' : 'text-slate-700 dark:text-zinc-200'}`} />
-          
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] sm:h-5 sm:min-w-[20px] px-0.5 sm:px-1 items-center justify-center rounded-full bg-[#F27D26] text-[9px] sm:text-[10px] font-black text-black ring-1 sm:ring-2 ring-white dark:ring-[#121212] animate-pulse">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
+          {isOpen ? (
+            <X className="w-4 h-4 sm:w-5 sm:h-5 text-[#F27D26] stroke-[2.5] transition-transform animate-scaleUp" />
+          ) : (
+            <>
+              <Bell className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:rotate-12 text-slate-700 dark:text-zinc-200" />
+              
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] sm:h-5 sm:min-w-[20px] px-0.5 sm:px-1 items-center justify-center rounded-full bg-[#F27D26] text-[9px] sm:text-[10px] font-black text-black ring-1 sm:ring-2 ring-white dark:ring-[#121212] animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </>
           )}
         </button>
 
@@ -297,6 +310,41 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
                       <Shield className="w-3.5 h-3.5" />
                       <span className="text-[10px] hidden sm:inline">{importantOnly ? 'Spam Shield' : 'All'}</span>
                     </button>
+
+                    {/* Browser Push Notification Toggle */}
+                    {browserPermission !== 'unsupported' && (
+                      <button
+                        id="toggle-browser-push-btn"
+                        type="button"
+                        onClick={() => {
+                          if (browserPermission === 'default') {
+                            requestBrowserPermission();
+                          } else if (browserPermission === 'granted') {
+                            setBrowserNotificationsEnabled(!browserNotificationsEnabled);
+                          }
+                        }}
+                        title={
+                          browserPermission === 'denied'
+                            ? 'Browser notifications blocked in browser settings'
+                            : browserNotificationsEnabled && browserPermission === 'granted'
+                            ? 'Browser push alerts active (Click to disable)'
+                            : 'Enable browser desktop/mobile push alerts'
+                        }
+                        className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                          browserNotificationsEnabled && browserPermission === 'granted'
+                            ? 'text-[#F27D26] hover:bg-[#F27D26]/10'
+                            : browserPermission === 'denied'
+                            ? 'text-slate-300 dark:text-zinc-600 opacity-60 cursor-not-allowed'
+                            : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5'
+                        }`}
+                      >
+                        {browserNotificationsEnabled && browserPermission === 'granted' ? (
+                          <BellRing className="w-4 h-4" />
+                        ) : (
+                          <BellOff className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
 
                     {/* Sound Toggle */}
                     <button
@@ -361,6 +409,23 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
               </div>
             ) : (
               <>
+                {/* Browser Push Notification Prompt Banner if not enabled */}
+                {browserPermission === 'default' && (
+                  <div className="px-3.5 py-2 bg-gradient-to-r from-[#F27D26]/10 to-amber-500/10 border-b border-[#F27D26]/20 flex items-center justify-between gap-2 text-[11px]">
+                    <div className="flex items-center gap-1.5 text-slate-800 dark:text-zinc-200">
+                      <BellRing className="w-3.5 h-3.5 text-[#F27D26] shrink-0" />
+                      <span>Enable browser alerts for live order status changes</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => requestBrowserPermission()}
+                      className="px-2.5 py-1 rounded-md bg-[#F27D26] text-black font-extrabold text-[10px] hover:bg-[#e06d1a] transition-colors cursor-pointer shrink-0 shadow-2xs"
+                    >
+                      Turn On
+                    </button>
+                  </div>
+                )}
+
                 {/* Anti-Spam Security Info Banner */}
                 {importantOnly && (
                   <div className="px-3.5 py-1.5 bg-amber-500/10 dark:bg-amber-500/5 border-b border-amber-500/15 flex items-center justify-between text-[11px] text-amber-800 dark:text-amber-300">

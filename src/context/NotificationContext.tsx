@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
   AppNotification, 
   UserRole, 
@@ -22,6 +22,15 @@ import {
   isImportantNotification,
   INITIAL_SEED_NOTIFICATIONS
 } from '../services/notificationService';
+import { 
+  getBrowserNotificationPermission,
+  getBrowserNotificationPreference,
+  setBrowserNotificationPreference,
+  requestBrowserNotificationPermission,
+  sendBrowserNativeNotification,
+  pushBrowserOrderStatusNotification,
+  BrowserNotificationStatus
+} from '../utils/browserNotifications';
 import { sendBroadcastCampaign } from '../services/broadcastService';
 import { useAuth } from './AuthContext';
 import { 
@@ -37,6 +46,11 @@ interface NotificationContextType {
   setSoundEnabled: (enabled: boolean) => void;
   importantOnly: boolean;
   setImportantOnly: (enabled: boolean) => void;
+  browserPermission: BrowserNotificationStatus;
+  browserNotificationsEnabled: boolean;
+  setBrowserNotificationsEnabled: (enabled: boolean) => void;
+  requestBrowserPermission: () => Promise<BrowserNotificationStatus>;
+  pushNativeNotification: (title: string, options?: { body?: string; tag?: string; onClick?: () => void }) => boolean;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   markThreadNotificationsAsRead: (customerId: string) => Promise<void>;
@@ -74,6 +88,50 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       return true;
     }
   });
+
+  // Native Browser Notification permission & user preference
+  const [browserPermission, setBrowserPermission] = useState<BrowserNotificationStatus>(() => getBrowserNotificationPermission());
+  const [browserNotificationsEnabled, setBrowserNotificationsEnabledState] = useState<boolean>(() => getBrowserNotificationPreference());
+
+  useEffect(() => {
+    // Refresh permission state on mount and window focus
+    const updatePerm = () => {
+      setBrowserPermission(getBrowserNotificationPermission());
+    };
+    updatePerm();
+    window.addEventListener('focus', updatePerm);
+    return () => window.removeEventListener('focus', updatePerm);
+  }, []);
+
+  const setBrowserNotificationsEnabled = useCallback((enabled: boolean) => {
+    setBrowserNotificationPreference(enabled);
+    setBrowserNotificationsEnabledState(enabled);
+    if (enabled && browserPermission === 'default') {
+      requestBrowserNotificationPermission().then(setBrowserPermission);
+    }
+  }, [browserPermission]);
+
+  const requestBrowserPermission = useCallback(async (): Promise<BrowserNotificationStatus> => {
+    const perm = await requestBrowserNotificationPermission();
+    setBrowserPermission(perm);
+    if (perm === 'granted') {
+      setBrowserNotificationsEnabledState(true);
+      setBrowserNotificationPreference(true);
+    }
+    return perm;
+  }, []);
+
+  const pushNativeNotification = useCallback((title: string, options?: { body?: string; tag?: string; onClick?: () => void }): boolean => {
+    if (!browserNotificationsEnabled || browserPermission !== 'granted') {
+      return false;
+    }
+    return sendBrowserNativeNotification({
+      title,
+      body: options?.body || '',
+      tag: options?.tag,
+      onClick: options?.onClick
+    });
+  }, [browserNotificationsEnabled, browserPermission]);
 
   useEffect(() => {
     try {
@@ -120,6 +178,22 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           if (!n.read && isImportantNotification(n) && n.type !== 'new_message') {
             hasNewImportant = true;
           }
+
+          // Push browser-native notification when an order status or freight update arrives
+          if (!n.read && (n.type === 'order_status' || n.type === 'customs_update')) {
+            if (browserNotificationsEnabled && (browserPermission === 'granted' || (typeof Notification !== 'undefined' && Notification.permission === 'granted'))) {
+              pushBrowserOrderStatusNotification({
+                orderNumber: n.referenceId || 'Consignment',
+                newStatus: (n.status as OrderStatus) || 'shipped',
+                country: n.country,
+                onClick: () => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('ee_navigate_to_view', { detail: { view: 'orders', orderId: n.referenceId } }));
+                  }
+                }
+              });
+            }
+          }
         }
       }
 
@@ -134,7 +208,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => {
       unsubscribe();
     };
-  }, [currentUser, isAdmin, role, soundEnabled]);
+  }, [currentUser, isAdmin, role, soundEnabled, browserNotificationsEnabled, browserPermission]);
 
   const importantNotifications = currentUser ? notifications.filter(isImportantNotification) : [];
 
@@ -194,6 +268,21 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       country
     );
 
+    // Push browser-native notification
+    if (browserNotificationsEnabled && (browserPermission === 'granted' || (typeof Notification !== 'undefined' && Notification.permission === 'granted'))) {
+      pushBrowserOrderStatusNotification({
+        orderNumber,
+        newStatus: status,
+        trackingNumber,
+        country,
+        onClick: () => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('ee_navigate_to_view', { detail: { view: 'orders', orderId: orderNumber } }));
+          }
+        }
+      });
+    }
+
     // Only update local state if active user is customer recipient
     if (!isAdmin) {
       setNotifications(prev => [created, ...prev.filter(n => n.id !== created.id)]);
@@ -223,6 +312,34 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     setNotifications(prev => [relevant, ...prev.filter(n => n.id !== relevant.id)]);
     if (soundEnabled && isImportantNotification(relevant)) {
       playNotificationSound();
+    }
+
+    // Push native browser notification for new order placed
+    if (browserNotificationsEnabled && (browserPermission === 'granted' || (typeof Notification !== 'undefined' && Notification.permission === 'granted'))) {
+      if (isAdmin) {
+        sendBrowserNativeNotification({
+          title: `🛍️ New Order Received: #${orderNumber}`,
+          body: `${customerName || 'Customer'} submitted a wholesale PO ($${total.toLocaleString()}).`,
+          tag: `order-new-${orderNumber}`,
+          onClick: () => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('ee_navigate_to_view', { detail: { view: 'admin' } }));
+            }
+          }
+        });
+      } else {
+        pushBrowserOrderStatusNotification({
+          orderNumber,
+          newStatus: 'pending',
+          total,
+          country,
+          onClick: () => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('ee_navigate_to_view', { detail: { view: 'orders', orderId: orderNumber } }));
+            }
+          }
+        });
+      }
     }
   };
 
@@ -322,6 +439,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         setSoundEnabled,
         importantOnly,
         setImportantOnly,
+        browserPermission,
+        browserNotificationsEnabled,
+        setBrowserNotificationsEnabled,
+        requestBrowserPermission,
+        pushNativeNotification,
         markAsRead,
         markAllAsRead,
         markThreadNotificationsAsRead,

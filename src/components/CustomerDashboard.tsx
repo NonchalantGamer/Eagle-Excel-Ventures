@@ -25,11 +25,12 @@ import {
   ArrowUpDown,
   SlidersHorizontal
 } from 'lucide-react';
-import { Order, OrderStatus } from '../types';
+import { Order, OrderStatus, Product, OrderItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { subscribeToOrders, getLocalCachedOrders, cancelOrder, deleteOrder } from '../services/orderService';
+import { getCachedProducts } from '../services/productService';
 import { initiateFlutterwavePayment } from '../services/flutterwave';
 import { useToast } from './Toast';
 import { OrderListSkeleton, DashboardMetricsSkeleton } from './ui/Skeleton';
@@ -37,7 +38,7 @@ import { useModalFocusLock } from '../hooks/useModalFocusLock';
 
 export const CustomerDashboard: React.FC = () => {
   const { currentUser, userProfile, isHydrated } = useAuth();
-  const { addToCart } = useCart();
+  const { addToCart, addMultipleToCart, setIsCartOpen } = useCart();
   const { formatPrice, convertPrice, currency: currentCurrency } = useCurrency();
   const { showToast } = useToast();
 
@@ -160,6 +161,73 @@ export const CustomerDashboard: React.FC = () => {
     } finally {
       setDeletingOrderId(null);
     }
+  };
+
+  const handleReorder = (order: Order) => {
+    if (!order || !order.items || order.items.length === 0) {
+      showToast('No items found in this order to reorder.', 'error');
+      return;
+    }
+
+    const cachedProducts = getCachedProducts();
+
+    const itemsToAdd = order.items.map(orderItem => {
+      const matched = cachedProducts.find(
+        p => p.id === orderItem.productId || (p.sku && orderItem.sku && p.sku.toLowerCase() === orderItem.sku.toLowerCase())
+      );
+
+      const product: Product = matched || {
+        id: orderItem.productId,
+        name: orderItem.name,
+        sku: orderItem.sku || `SKU-${orderItem.productId}`,
+        category: 'General',
+        description: orderItem.name,
+        price: orderItem.unitPrice,
+        wholesaleTiers: [{ minQty: 1, pricePerUnit: orderItem.unitPrice }],
+        stock: 9999,
+        minOrderQty: 1,
+        unit: orderItem.unit || 'Unit',
+        images: [orderItem.image || ''],
+        specs: {},
+        createdAt: new Date().toISOString()
+      };
+
+      return {
+        product,
+        quantity: orderItem.quantity
+      };
+    });
+
+    addMultipleToCart(itemsToAdd);
+
+    const totalUnits = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    showToast(`Added ${order.items.length} item(s) (${totalUnits} total units) from Order #${order.orderNumber} to your cart!`, 'success');
+  };
+
+  const handleReorderSingleItem = (orderItem: OrderItem) => {
+    const cachedProducts = getCachedProducts();
+    const matched = cachedProducts.find(
+      p => p.id === orderItem.productId || (p.sku && orderItem.sku && p.sku.toLowerCase() === orderItem.sku.toLowerCase())
+    );
+
+    const product: Product = matched || {
+      id: orderItem.productId,
+      name: orderItem.name,
+      sku: orderItem.sku || `SKU-${orderItem.productId}`,
+      category: 'General',
+      description: orderItem.name,
+      price: orderItem.unitPrice,
+      wholesaleTiers: [{ minQty: 1, pricePerUnit: orderItem.unitPrice }],
+      stock: 9999,
+      minOrderQty: 1,
+      unit: orderItem.unit || 'Unit',
+      images: [orderItem.image || ''],
+      specs: {},
+      createdAt: new Date().toISOString()
+    };
+
+    addToCart(product, orderItem.quantity);
+    showToast(`Added ${orderItem.quantity}x ${orderItem.name} to your cart!`, 'success');
   };
 
   const isDeletable = (order: Order) => order.status === 'cancelled' || order.paymentStatus === 'failed';
@@ -443,41 +511,52 @@ export const CustomerDashboard: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center justify-between md:justify-end gap-3 sm:gap-6 pt-3 md:pt-0 border-t md:border-t-0 border-slate-200 dark:border-white/5 shrink-0">
-                {order.status !== 'cancelled' && order.paymentStatus !== 'paid' && (
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      disabled={retryingOrderId === order.id}
-                      onClick={() => handleRetryPayment(order)}
-                      className="px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 text-xs font-extrabold transition-all flex items-center gap-1.5 btn-hover cursor-pointer disabled:opacity-50 shadow-sm"
-                      title="Retry checkout via Flutterwave"
-                    >
-                      {retryingOrderId === order.id ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
-                          <span>Opening...</span>
-                        </>
-                      ) : (
-                        <>
-                          <CreditCard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                          <span>Retry Payment</span>
-                        </>
-                      )}
-                    </button>
+              <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5 sm:gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-slate-200 dark:border-white/5 shrink-0">
+                <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  {/* Reorder Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleReorder(order)}
+                    className="px-3 py-1.5 rounded-xl border border-[#F27D26]/40 bg-[#F27D26]/10 hover:bg-[#F27D26]/20 text-[#F27D26] text-xs font-extrabold transition-all flex items-center gap-1.5 btn-hover cursor-pointer shadow-sm"
+                    title={`Add all ${order.items.length} item(s) from Order #${order.orderNumber} back into cart`}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reorder</span>
+                  </button>
 
-                    <button
-                      onClick={() => setOrderToCancel(order)}
-                      className="px-3 py-1.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all flex items-center gap-1.5 btn-hover cursor-pointer"
-                    >
-                      <Ban className="w-3.5 h-3.5" />
-                      <span>Cancel</span>
-                    </button>
-                  </div>
-                )}
+                  {order.status !== 'cancelled' && order.paymentStatus !== 'paid' && (
+                    <>
+                      <button
+                        disabled={retryingOrderId === order.id}
+                        onClick={() => handleRetryPayment(order)}
+                        className="px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 text-xs font-extrabold transition-all flex items-center gap-1.5 btn-hover cursor-pointer disabled:opacity-50 shadow-sm"
+                        title="Retry checkout via Flutterwave"
+                      >
+                        {retryingOrderId === order.id ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+                            <span>Opening...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span>Retry Payment</span>
+                          </>
+                        )}
+                      </button>
 
-                {/* Delete button for cancelled / failed orders */}
-                {isDeletable(order) && (
-                  <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => setOrderToCancel(order)}
+                        className="px-3 py-1.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all flex items-center gap-1.5 btn-hover cursor-pointer"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        <span>Cancel</span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* Delete button for cancelled / failed orders */}
+                  {isDeletable(order) && (
                     <button
                       onClick={() => setOrderToDelete(order)}
                       className="px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all flex items-center gap-1.5 btn-hover cursor-pointer"
@@ -486,8 +565,8 @@ export const CustomerDashboard: React.FC = () => {
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Delete</span>
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 <div className="text-right">
                   <span className="text-[11px] text-slate-500 dark:text-zinc-500 block">Total Amount</span>
@@ -640,8 +719,11 @@ export const CustomerDashboard: React.FC = () => {
 
               {/* Items Table */}
               <div>
-                <div className="font-bold uppercase text-[11px] tracking-wider mb-2 text-slate-900 dark:text-zinc-300">
-                  Itemized Products
+                <div className="font-bold uppercase text-[11px] tracking-wider mb-2 text-slate-900 dark:text-zinc-300 flex items-center justify-between">
+                  <span>Itemized Products</span>
+                  <span className="text-[11px] font-normal text-slate-500 dark:text-zinc-400">
+                    {selectedOrder.items.length} line item(s)
+                  </span>
                 </div>
                 <div className="border border-slate-200 dark:border-white/5 rounded-2xl overflow-hidden bg-white dark:bg-[#161616]">
                   <table className="w-full text-left">
@@ -652,6 +734,7 @@ export const CustomerDashboard: React.FC = () => {
                         <th className="p-3 text-center">Quantity</th>
                         <th className="p-3 text-right">Wholesale Rate</th>
                         <th className="p-3 text-right">Subtotal</th>
+                        <th className="p-3 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-white/5">
@@ -670,6 +753,17 @@ export const CustomerDashboard: React.FC = () => {
                           <td className="p-3 text-center font-bold text-slate-900 dark:text-zinc-100">{item.quantity}</td>
                           <td className="p-3 text-right text-slate-700 dark:text-zinc-300 font-medium">{formatPrice(item.unitPrice)}</td>
                           <td className="p-3 text-right font-extrabold text-[#F27D26]">{formatPrice(item.subtotal)}</td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleReorderSingleItem(item)}
+                              className="px-2 py-1 rounded-lg border border-[#F27D26]/40 bg-[#F27D26]/10 hover:bg-[#F27D26]/20 text-[#F27D26] text-[11px] font-bold transition-all inline-flex items-center gap-1 btn-hover cursor-pointer"
+                              title={`Add ${item.quantity}x ${item.name} to cart`}
+                            >
+                              <ShoppingBag className="w-3 h-3" />
+                              <span className="hidden sm:inline">Add</span>
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -680,6 +774,17 @@ export const CustomerDashboard: React.FC = () => {
               {/* Totals Summary & Invoice Actions */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-slate-200 dark:border-white/5">
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* Reorder Entire Order Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleReorder(selectedOrder)}
+                    className="px-4 py-2.5 rounded-xl border border-[#F27D26]/50 bg-[#F27D26] hover:bg-[#e06d1a] text-black text-xs font-black transition-all flex items-center gap-2 btn-hover cursor-pointer shadow-lg shadow-[#F27D26]/25"
+                    title="Add all items from this order into your cart"
+                  >
+                    <RotateCcw className="w-4 h-4 text-black stroke-[2.5]" />
+                    <span>Reorder All Items</span>
+                  </button>
+
                   {selectedOrder.status !== 'cancelled' && selectedOrder.paymentStatus !== 'paid' && (
                     <>
                       <button

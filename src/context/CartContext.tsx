@@ -9,6 +9,7 @@ interface CartContextType {
   tax: number;
   total: number;
   addToCart: (product: Product, quantity?: number) => void;
+  addMultipleToCart: (itemsToAdd: { product: Product; quantity?: number }[]) => void;
   addItem?: (product: Product, quantity?: number, price?: number) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
@@ -91,6 +92,42 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsCartOpen(true);
   };
 
+  const addMultipleToCart = (itemsToAdd: { product: Product; quantity?: number }[]) => {
+    if (!itemsToAdd || itemsToAdd.length === 0) return;
+
+    setItems(prevItems => {
+      const updated = [...prevItems];
+
+      itemsToAdd.forEach(({ product, quantity: requestedQty }) => {
+        const qty = requestedQty !== undefined ? requestedQty : (product.minOrderQty || 1);
+        const existingIndex = updated.findIndex(item => item.product.id === product.id);
+
+        if (existingIndex > -1) {
+          const newQty = updated[existingIndex].quantity + qty;
+          const tierPrice = getProductTierPrice(product, newQty);
+          updated[existingIndex] = {
+            product,
+            quantity: newQty,
+            selectedTierPrice: tierPrice,
+            subtotal: Number((newQty * tierPrice).toFixed(2))
+          };
+        } else {
+          const tierPrice = getProductTierPrice(product, qty);
+          updated.push({
+            product,
+            quantity: qty,
+            selectedTierPrice: tierPrice,
+            subtotal: Number((qty * tierPrice).toFixed(2))
+          });
+        }
+      });
+
+      return updated;
+    });
+
+    setIsCartOpen(true);
+  };
+
   const updateQuantity = (productId: string, quantity: number) => {
     setItems(prevItems => {
       if (quantity <= 0) {
@@ -151,6 +188,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         tax,
         total,
         addToCart,
+        addMultipleToCart,
         addItem: (product: Product, quantity?: number) => addToCart(product, quantity || 1),
         updateQuantity,
         removeFromCart,

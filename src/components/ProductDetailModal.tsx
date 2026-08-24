@@ -16,34 +16,46 @@ import {
   Copy,
   Check,
   Share2,
-  FileText
+  FileText,
+  Heart,
+  Star
 } from 'lucide-react';
 import { Product } from '../types';
 import { useCart, getProductTierPrice } from '../context/CartContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { useWishlist } from '../context/WishlistContext';
+import { useOrders } from '../context/OrderContext';
 import { useToast } from './Toast';
 import { useModalFocusLock } from '../hooks/useModalFocusLock';
+import { ProductReviewsSection } from './ProductReviewsSection';
+import { getProductReviews, calculateReviewSummary } from '../services/reviewService';
 
 interface ProductDetailModalProps {
   product: Product | null;
   onClose: () => void;
   onOpenSupportWithProduct?: (product: Product) => void;
   onNavigateToRfq?: (product: Product) => void;
+  onOpenAuth?: () => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   product,
   onClose,
   onOpenSupportWithProduct,
-  onNavigateToRfq
+  onNavigateToRfq,
+  onOpenAuth
 }) => {
   const { addToCart, setIsCartOpen } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
+  const { orders } = useOrders();
   const { formatPrice } = useCurrency();
   const { showToast } = useToast();
 
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [quantity, setQuantity] = useState(10);
   const [copiedSku, setCopiedSku] = useState(false);
+  const [liveRating, setLiveRating] = useState<number>(() => product?.rating || 5.0);
+  const [liveReviewsCount, setLiveReviewsCount] = useState<number>(() => product?.reviewsCount || 0);
 
   useModalFocusLock(!!product, onClose);
 
@@ -51,10 +63,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     if (product) {
       setQuantity(product.minOrderQty || 10);
       setActiveImageIdx(0);
+      const revs = getProductReviews(product.id);
+      const summary = calculateReviewSummary(revs, product.rating, product.reviewsCount);
+      setLiveRating(summary.averageRating);
+      setLiveReviewsCount(summary.totalReviews);
     }
   }, [product]);
 
   if (!product) return null;
+
+  const isSaved = isInWishlist(product.id);
 
   const currentTierPrice = getProductTierPrice(product, quantity);
   const lineSubtotal = Number((quantity * currentTierPrice).toFixed(2));
@@ -127,6 +145,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => toggleWishlist(product)}
+              className={`p-2 rounded-xl transition-all cursor-pointer ${
+                isSaved
+                  ? 'bg-rose-500/15 text-rose-500 border border-rose-500/30'
+                  : 'text-slate-500 dark:text-zinc-400 hover:text-rose-500 hover:bg-slate-200 dark:hover:bg-white/5'
+              }`}
+              title={isSaved ? 'Remove from Wishlist' : 'Save to Wishlist'}
+              aria-label="Toggle Wishlist"
+            >
+              <Heart className={`w-4 h-4 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />
+            </button>
             <button
               type="button"
               onClick={handleShareProduct}
@@ -208,7 +239,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <h1 className="text-xl sm:text-2xl font-bold font-serif text-slate-900 dark:text-white leading-snug">
                   {product.name}
                 </h1>
-                <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 dark:text-zinc-400">
+                
+                {/* Rating & Stock Subtitle */}
+                <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-slate-500 dark:text-zinc-400">
+                  <div className="flex items-center gap-1 bg-amber-400/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-lg border border-amber-400/20 font-bold">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>{liveRating.toFixed(1)}</span>
+                    <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal">({liveReviewsCount} reviews)</span>
+                  </div>
+                  <span>•</span>
                   <span>Packaging: <strong className="text-slate-800 dark:text-zinc-200 font-bold">{product.unit}</strong></span>
                   <span>•</span>
                   <span className="text-emerald-600 dark:text-emerald-400 font-bold">
@@ -344,14 +383,30 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  className="w-full py-3 px-4 rounded-xl btn-primary-morphic text-black font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 btn-hover cursor-pointer whitespace-nowrap"
-                >
-                  <ShoppingCart className="w-4 h-4 text-black stroke-[2.5] shrink-0" />
-                  <span className="whitespace-nowrap">Add {quantity} Units to Wholesale Cart</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    className="flex-1 py-3 px-4 rounded-xl btn-primary-morphic text-black font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 btn-hover cursor-pointer whitespace-nowrap"
+                  >
+                    <ShoppingCart className="w-4 h-4 text-black stroke-[2.5] shrink-0" />
+                    <span className="whitespace-nowrap">Add {quantity} Units to Cart</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleWishlist(product)}
+                    className={`py-3 px-3.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      isSaved
+                        ? 'bg-rose-500/15 border-rose-500/40 text-rose-600 dark:text-rose-400'
+                        : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 hover:text-rose-500'
+                    }`}
+                    title={isSaved ? 'Remove from Wishlist' : 'Save for Later'}
+                  >
+                    <Heart className={`w-4 h-4 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />
+                    <span className="hidden sm:inline">{isSaved ? 'Saved' : 'Save'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Inquiry & RFQ Shortcuts */}
@@ -404,6 +459,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Verified Wholesale Buyer Reviews Section */}
+          <ProductReviewsSection
+            product={product}
+            userOrders={orders}
+            onOpenAuth={onOpenAuth}
+            onUpdateProductRating={(newRating, count) => {
+              setLiveRating(newRating);
+              setLiveReviewsCount(count);
+            }}
+          />
 
         </div>
       </div>

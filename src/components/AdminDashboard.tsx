@@ -614,7 +614,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       await updateOrderStatus(orderId, newStatus);
       const targetOrder = orders.find(o => o.id === orderId);
       if (targetOrder) {
-        notifyCustomerOrderStatus(targetOrder.orderNumber, newStatus, targetOrder.trackingNumber);
+        const country = targetOrder.shippingAddress?.country?.toLowerCase()?.includes('cameroon') ? 'cameroon' : 'nigeria';
+        notifyCustomerOrderStatus(targetOrder.orderNumber, newStatus, targetOrder.trackingNumber, country);
       }
       showToast(`Order status updated to "${newStatus}".`);
     } catch (err) {
@@ -633,10 +634,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         trackingNumberInput.trim(), 
         carrierInput.trim()
       );
+      const country = shippingModalOrder.shippingAddress?.country?.toLowerCase()?.includes('cameroon') ? 'cameroon' : 'nigeria';
       notifyCustomerOrderStatus(
         shippingModalOrder.orderNumber, 
         'shipped', 
-        trackingNumberInput.trim()
+        trackingNumberInput.trim(),
+        country
       );
       showToast(`Order ${shippingModalOrder.orderNumber} marked as SHIPPED with carrier ${carrierInput}!`);
       setShippingModalOrder(null);

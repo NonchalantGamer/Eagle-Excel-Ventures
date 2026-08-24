@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ShoppingCart, Eye, Package, ShieldCheck, TrendingDown, Check, Sparkles, Copy } from 'lucide-react';
+import { ShoppingCart, Eye, Package, ShieldCheck, TrendingDown, Check, Sparkles, Copy, Heart } from 'lucide-react';
 import { Product } from '../types';
 import { useCart } from '../context/CartContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { useWishlist } from '../context/WishlistContext';
 import { useToast } from './Toast';
 import { HighlightedText } from '../utils/searchMatcher';
 
@@ -24,10 +25,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   viewMode = 'grid'
 }) => {
   const { addToCart, setIsCartOpen } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
   const { formatPrice } = useCurrency();
   const { showToast } = useToast();
   const [isAdded, setIsAdded] = useState(false);
   const [copiedSku, setCopiedSku] = useState(false);
+
+  const isSaved = isInWishlist(product.id);
 
   // Calculate highest bulk discount percentage
   const lowestTierPrice = product.wholesaleTiers && product.wholesaleTiers.length > 0
@@ -37,6 +41,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const maxDiscount = product.price > lowestTierPrice
     ? Math.round(((product.price - lowestTierPrice) / product.price) * 100)
     : 0;
+
+  const handleToggleWishlist = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleWishlist(product);
+  };
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -135,7 +144,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-white/5">
+        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-white/5">
           <div className="text-left sm:text-right shrink-0">
             <span className="text-[10px] text-slate-500 dark:text-zinc-400 block font-medium">Wholesale Rate</span>
             <div className="flex items-baseline gap-1">
@@ -146,7 +155,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleToggleWishlist}
+              className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                isSaved 
+                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-500' 
+                  : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 hover:text-rose-500'
+              }`}
+              title={isSaved ? 'Remove from Wishlist' : 'Save to Wishlist'}
+            >
+              <Heart className={`w-4 h-4 ${isSaved ? 'fill-rose-500' : ''}`} />
+            </button>
+
             <button
               type="button"
               onClick={handleQuickAdd}
@@ -222,8 +244,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        {/* Stock Status Badge */}
-        <div className="absolute top-3 right-3">
+        {/* Stock Status & Floating Wishlist Button */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
           {product.stock > 100 ? (
             <span className="bg-emerald-500/90 dark:bg-emerald-500/20 border border-emerald-600/30 text-white dark:text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-sm backdrop-blur-md">
               {product.stock} In Stock
@@ -237,6 +259,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               Backorder
             </span>
           )}
+
+          <button
+            type="button"
+            onClick={handleToggleWishlist}
+            className={`p-1.5 rounded-lg backdrop-blur-md border transition-all cursor-pointer shadow-sm ${
+              isSaved 
+                ? 'bg-rose-500/90 border-rose-400 text-white' 
+                : 'bg-black/40 hover:bg-black/70 border-white/20 text-white/80 hover:text-rose-400'
+            }`}
+            title={isSaved ? 'Remove from Wishlist' : 'Save to Wishlist'}
+          >
+            <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-white' : ''}`} />
+          </button>
         </div>
 
         {/* Quick View Overlay on Desktop */}
@@ -324,27 +359,43 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <span className="whitespace-nowrap">MOQ: <strong className="text-slate-900 dark:text-zinc-200 font-bold">{product.minOrderQty || 1}</strong></span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleQuickAdd}
-            className={`py-2 px-3 sm:px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all btn-hover shrink-0 whitespace-nowrap cursor-pointer ${
-              isAdded
-                ? 'bg-emerald-500 text-black font-extrabold'
-                : 'btn-primary-morphic'
-            }`}
-          >
-            {isAdded ? (
-              <>
-                <Check className="w-3.5 h-3.5 stroke-[3]" /> Added
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="w-3.5 h-3.5 text-black" /> + Add MOQ
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleToggleWishlist}
+              className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                isSaved 
+                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-500' 
+                  : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 hover:text-rose-500'
+              }`}
+              title={isSaved ? 'Remove from Wishlist' : 'Save to Wishlist'}
+            >
+              <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-rose-500' : ''}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleQuickAdd}
+              className={`py-2 px-3 sm:px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all btn-hover shrink-0 whitespace-nowrap cursor-pointer ${
+                isAdded
+                  ? 'bg-emerald-500 text-black font-extrabold'
+                  : 'btn-primary-morphic'
+              }`}
+            >
+              {isAdded ? (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" /> Added
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="w-3.5 h-3.5 text-black" /> + Add MOQ
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+

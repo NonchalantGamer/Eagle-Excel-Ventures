@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { WishlistProvider } from './context/WishlistContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, useToast } from './components/Toast';
@@ -32,17 +33,18 @@ import { CustomerMessageWatcher } from './components/chat/CustomerMessageWatcher
 
 // Code-split secondary views and modals for fast initial page load & responsiveness
 const CatalogPage = lazy(() => import('./pages/CatalogPage').then(m => ({ default: m.CatalogPage })));
+const WishlistPage = lazy(() => import('./pages/WishlistPage').then(m => ({ default: m.WishlistPage })));
 const SupplyChainPage = lazy(() => import('./pages/SupplyChainPage').then(m => ({ default: m.SupplyChainPage })));
 const RFQPage = lazy(() => import('./pages/RFQPage').then(m => ({ default: m.RFQPage })));
 const AboutPage = lazy(() => import('./pages/AboutPage').then(m => ({ default: m.AboutPage })));
 const DocsPage = lazy(() => import('./pages/DocsPage').then(m => ({ default: m.DocsPage })));
 const ManageProductsPage = lazy(() => import('./pages/ManageProductsPage').then(m => ({ default: m.ManageProductsPage })));
+const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage').then(m => ({ default: m.ProductDetailPage })));
 
 const CustomerDashboard = lazy(() => import('./components/CustomerDashboard').then(m => ({ default: m.CustomerDashboard })));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const CustomerProfileDashboard = lazy(() => import('./components/profile/CustomerProfileDashboard').then(m => ({ default: m.CustomerProfileDashboard })));
 const AdminProfileDashboard = lazy(() => import('./components/profile/AdminProfileDashboard').then(m => ({ default: m.AdminProfileDashboard })));
-const ProductDetailModal = lazy(() => import('./components/ProductDetailModal').then(m => ({ default: m.ProductDetailModal })));
 const CustomerSupportModal = lazy(() => import('./components/CustomerSupportModal').then(m => ({ default: m.CustomerSupportModal })));
 const SupportPage = lazy(() => import('./pages/SupportPage').then(m => ({ default: m.SupportPage })));
 const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
@@ -50,7 +52,7 @@ const RequestQuoteModal = lazy(() => import('./components/home/RequestQuoteModal
 const FloatingWhatsAppButton = lazy(() => import('./components/home/FloatingWhatsAppButton').then(m => ({ default: m.FloatingWhatsAppButton })));
 const CommandPaletteModal = lazy(() => import('./components/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
 
-const VALID_VIEWS: PageView[] = ['home', 'catalog', 'supply-chain', 'rfq', 'orders', 'about', 'admin', 'docs', 'profile', 'manage-products', 'support'];
+const VALID_VIEWS: PageView[] = ['home', 'catalog', 'product', 'wishlist', 'supply-chain', 'rfq', 'orders', 'about', 'admin', 'docs', 'profile', 'manage-products', 'support'];
 const STORAGE_KEY = 'eagle_excel_active_page_view';
 
 // Helper to determine initial page view on page refresh, direct link, or reload
@@ -221,7 +223,11 @@ const MainApp: React.FC = () => {
       // ignore
     }
 
-    const targetHash = currentView === 'home' ? '#/' : `#/${currentView}`;
+    const targetHash = currentView === 'home' 
+      ? '#/' 
+      : currentView === 'product' && selectedProduct 
+      ? `#/product?id=${encodeURIComponent(selectedProduct.id)}`
+      : `#/${currentView}`;
     const rawHash = window.location.hash || '';
     const currentHash = rawHash
       .replace(/^#+/, '')
@@ -233,7 +239,7 @@ const MainApp: React.FC = () => {
       .toLowerCase();
     const expectedHash = currentView === 'home' ? '' : currentView;
 
-    if (currentHash !== expectedHash) {
+    if (currentHash !== expectedHash || (currentView === 'product' && rawHash !== targetHash)) {
       try {
         window.history.replaceState(null, '', targetHash);
       } catch (e) {
@@ -301,6 +307,15 @@ const MainApp: React.FC = () => {
     }
   }, [currentView, markOrdersAsViewed]);
 
+  // Central product selection handler that navigates to dedicated Product Page
+  const handleSelectProduct = (product: Product) => {
+    setSelectedProduct(product);
+    try {
+      sessionStorage.setItem('ee_active_product_id', product.id);
+    } catch {}
+    handleNavigate('product', { product: product.id });
+  };
+
   // Navigation handler with state persistence and admin protection
   const handleNavigate = (view: PageView, options?: { category?: string; product?: string }) => {
     if ((view === 'admin' || view === 'manage-products') && !isAdmin && isHydrated && !authLoading) {
@@ -318,7 +333,12 @@ const MainApp: React.FC = () => {
       // ignore
     }
 
-    const targetHash = view === 'home' ? '#/' : `#/${view}`;
+    const targetHash = view === 'home' 
+      ? '#/' 
+      : view === 'product' && (options?.product || selectedProduct?.id)
+      ? `#/product?id=${encodeURIComponent(options?.product || selectedProduct?.id || '')}`
+      : `#/${view}`;
+
     if (window.location.hash !== targetHash) {
       try {
         window.history.pushState(null, '', targetHash);
@@ -357,26 +377,32 @@ const MainApp: React.FC = () => {
   // Auto-restore selected product from URL search or hash parameters on page load/refresh
   useEffect(() => {
     try {
-      if (typeof window !== 'undefined' && products && products.length > 0 && !selectedProduct) {
+      if (typeof window !== 'undefined' && products && products.length > 0) {
         const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '';
         const searchParams = new URLSearchParams(hashQuery || window.location.search || '');
         const skuParam = searchParams.get('sku');
-        const prodParam = searchParams.get('product') || searchParams.get('productId');
+        const prodParam = searchParams.get('product') || searchParams.get('productId') || searchParams.get('id');
+        const storedProdId = sessionStorage.getItem('ee_active_product_id');
 
-        if (skuParam || prodParam) {
-          const matched = products.find(p => 
-            (skuParam && p.sku?.toLowerCase() === skuParam.toLowerCase()) ||
-            (prodParam && p.id === prodParam)
-          );
-          if (matched) {
-            setSelectedProduct(matched);
+        if (!selectedProduct || (prodParam && selectedProduct.id !== prodParam)) {
+          if (skuParam || prodParam || (currentView === 'product' && storedProdId)) {
+            const matched = products.find(p => 
+              (skuParam && p.sku?.toLowerCase() === skuParam.toLowerCase()) ||
+              (prodParam && p.id === prodParam) ||
+              (!prodParam && !skuParam && storedProdId && p.id === storedProdId)
+            );
+            if (matched) {
+              setSelectedProduct(matched);
+            } else if (currentView === 'product' && products[0]) {
+              setSelectedProduct(products[0]);
+            }
           }
         }
       }
     } catch (e) {
       // ignore
     }
-  }, [products, selectedProduct]);
+  }, [products, selectedProduct, currentView]);
 
   // Load and subscribe to products in database in real-time
   useEffect(() => {
@@ -401,10 +427,18 @@ const MainApp: React.FC = () => {
       }
     };
 
+    const handleGenericNav = (e: Event) => {
+      const customEvt = e as CustomEvent<{ view: PageView; orderId?: string }>;
+      if (customEvt.detail?.view) {
+        handleNavigate(customEvt.detail.view);
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('eagle_products_updated', handleLocalProductsUpdate);
       window.addEventListener('eagle_product_newly_added', handleNewProductUploaded);
       window.addEventListener('ee_open_support_chat', () => handleOpenSupport());
+      window.addEventListener('ee_navigate_to_view', handleGenericNav);
     }
 
     return () => {
@@ -413,6 +447,7 @@ const MainApp: React.FC = () => {
         window.removeEventListener('eagle_products_updated', handleLocalProductsUpdate);
         window.removeEventListener('eagle_product_newly_added', handleNewProductUploaded);
         window.removeEventListener('ee_open_support_chat', () => handleOpenSupport());
+        window.removeEventListener('ee_navigate_to_view', handleGenericNav);
       }
     };
   }, []);
@@ -453,7 +488,7 @@ const MainApp: React.FC = () => {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           products={products}
-          onSelectProduct={setSelectedProduct}
+          onSelectProduct={handleSelectProduct}
           onSelectCategoryFilter={handleSelectCategoryFilter}
         />
       </div>
@@ -471,7 +506,7 @@ const MainApp: React.FC = () => {
             <HomePage
               products={products}
               onNavigate={handleNavigate}
-              onSelectProduct={setSelectedProduct}
+              onSelectProduct={handleSelectProduct}
               onRequestQuote={handleRequestQuote}
               onOpenSupport={handleOpenSupport}
               onSelectCategoryFilter={handleSelectCategoryFilter}
@@ -485,7 +520,7 @@ const MainApp: React.FC = () => {
             <CatalogPage
               products={products}
               searchQuery={searchQuery}
-              onSelectProduct={setSelectedProduct}
+              onSelectProduct={handleSelectProduct}
               onOpenAuth={() => setIsAuthModalOpen(true)}
               onOpenSupport={handleOpenSupport}
               onSearchChange={setSearchQuery}
@@ -493,6 +528,33 @@ const MainApp: React.FC = () => {
               onRequestQuote={handleRequestQuote}
               initialCategory={catalogInitialCategory}
               isLoading={isLoadingProducts}
+            />
+          </Suspense>
+        )}
+
+        {/* Dedicated Wholesale Product Details, Specifications, Reviews & Recommendations Page */}
+        {currentView === 'product' && (
+          <Suspense fallback={<PageSkeleton />}>
+            <ProductDetailPage
+              product={selectedProduct}
+              allProducts={products}
+              onSelectProduct={handleSelectProduct}
+              onNavigate={handleNavigate}
+              onOpenAuth={() => setIsAuthModalOpen(true)}
+              onOpenSupportWithProduct={handleOpenSupportWithProduct}
+              onRequestQuote={handleRequestQuote}
+            />
+          </Suspense>
+        )}
+
+        {/* Saved Products & Wishlist Page */}
+        {currentView === 'wishlist' && (
+          <Suspense fallback={<ProductGridSkeleton count={8} />}>
+            <WishlistPage
+              onNavigate={handleNavigate}
+              onSelectProduct={handleSelectProduct}
+              onOpenSupport={handleOpenSupport}
+              onRequestQuote={handleRequestQuote}
             />
           </Suspense>
         )}
@@ -558,7 +620,7 @@ const MainApp: React.FC = () => {
           <Suspense fallback={<AdminDashboardSkeleton />}>
             <ManageProductsPage
               onNavigate={handleNavigate}
-              onSelectProduct={setSelectedProduct}
+              onSelectProduct={handleSelectProduct}
             />
           </Suspense>
         )}
@@ -628,17 +690,6 @@ const MainApp: React.FC = () => {
           onOpenSettings={() => setIsSettingsModalOpen(true)}
         />
       </div>
-
-      {/* Product Detail Modal */}
-      {selectedProduct && (
-        <Suspense fallback={null}>
-          <ProductDetailModal
-            product={selectedProduct}
-            onClose={() => setSelectedProduct(null)}
-            onOpenSupportWithProduct={handleOpenSupportWithProduct}
-          />
-        </Suspense>
-      )}
 
       {/* Wholesale Cart Drawer */}
       <CartDrawer
@@ -718,7 +769,7 @@ const MainApp: React.FC = () => {
             onClose={() => setIsCommandPaletteOpen(false)}
             products={products}
             onNavigate={handleNavigate}
-            onSelectProduct={setSelectedProduct}
+            onSelectProduct={handleSelectProduct}
             onOpenSupport={() => handleOpenSupport()}
           />
         </Suspense>
@@ -772,7 +823,9 @@ export default function App() {
               <NotificationProvider>
                 <OrderProvider>
                   <CartProvider>
-                    <MainApp />
+                    <WishlistProvider>
+                      <MainApp />
+                    </WishlistProvider>
                   </CartProvider>
                 </OrderProvider>
               </NotificationProvider>

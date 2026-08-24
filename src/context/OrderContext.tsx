@@ -3,6 +3,7 @@ import { Order, OrderStatus } from '../types';
 import { subscribeToOrders, getLocalCachedOrders } from '../services/orderService';
 import { useAuth } from './AuthContext';
 import { useToast } from '../components/Toast';
+import { pushBrowserOrderStatusNotification } from '../utils/browserNotifications';
 
 interface AcknowledgedOrderMap {
   [orderId: string]: {
@@ -109,6 +110,21 @@ export const OrderProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               };
 
               setLatestStatusChange(changeInfo);
+
+              // Push browser-native push notification
+              pushBrowserOrderStatusNotification({
+                orderNumber: newOrder.orderNumber,
+                newStatus: newOrder.status,
+                previousStatus: prevOrder.status,
+                trackingNumber: newOrder.trackingNumber,
+                carrier: newOrder.carrier,
+                country: newOrder.shippingAddress?.country?.toLowerCase()?.includes('cameroon') ? 'cameroon' : 'nigeria',
+                onClick: () => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('ee_navigate_to_view', { detail: { view: 'orders', orderId: newOrder.orderNumber } }));
+                  }
+                }
+              });
 
               // Live Toast Alert for freight shipment and order status changes
               if (newOrder.status === 'shipped') {

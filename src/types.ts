@@ -1,6 +1,12 @@
 export type UserRole = 'admin' | 'customer';
 
-export type PageView = 'home' | 'catalog' | 'supply-chain' | 'rfq' | 'orders' | 'about' | 'admin' | 'docs' | 'profile' | 'manage-products' | 'support';
+export type PageView = 'home' | 'catalog' | 'product' | 'supply-chain' | 'rfq' | 'orders' | 'about' | 'admin' | 'docs' | 'profile' | 'manage-products' | 'support' | 'wishlist';
+
+export interface WishlistItem {
+  product: Product;
+  addedAt: string;
+  notes?: string;
+}
 
 export interface RFQSubmission {
   id: string;

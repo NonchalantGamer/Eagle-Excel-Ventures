@@ -23,11 +23,13 @@ import {
   Check,
   PhoneCall,
   Globe2,
-  ChevronDown
+  ChevronDown,
+  Heart
 } from 'lucide-react';
 import { Product, PageView } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useCurrency, CURRENCIES, CurrencyCode } from '../../context/CurrencyContext';
 import { getBrandLogo } from '../../constants/branding';
@@ -60,6 +62,7 @@ export const MobileNavigationDrawer: React.FC<MobileNavigationDrawerProps> = ({
 }) => {
   const { currentUser, userProfile, isAdmin, role, logout } = useAuth();
   const { itemCount, setIsCartOpen } = useCart();
+  const { wishlistCount } = useWishlist();
   const { isDark, toggleTheme } = useTheme();
   const { currency, setCurrency } = useCurrency();
 
@@ -146,6 +149,7 @@ export const MobileNavigationDrawer: React.FC<MobileNavigationDrawerProps> = ({
   const navLinks: { id: PageView; label: string; icon: any; badge?: string }[] = [
     { id: 'home', label: 'Home Overview', icon: Building2 },
     { id: 'catalog', label: 'Wholesale Catalog', icon: Layers },
+    { id: 'wishlist', label: 'Saved Wishlist', icon: Heart, badge: wishlistCount > 0 ? `${wishlistCount}` : undefined },
     { id: 'supply-chain', label: 'Supply Chain & Shipping', icon: Truck, badge: 'LTL/FCL' },
     { id: 'rfq', label: 'Custom Sourcing & RFQ', icon: FileText, badge: 'Quote in 60s' },
     { id: 'docs', label: 'Import Compliance & Docs', icon: HelpCircle },
@@ -492,6 +496,22 @@ export const MobileNavigationDrawer: React.FC<MobileNavigationDrawerProps> = ({
                         My Orders
                       </button>
                     </div>
+
+                    <button
+                      onClick={() => {
+                        onNavigate('wishlist');
+                        onClose();
+                      }}
+                      className="w-full py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-bold text-rose-600 dark:text-rose-400 transition-all flex items-center justify-between cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Heart className="w-3.5 h-3.5 fill-rose-500/30" />
+                        <span>Saved Wishlist</span>
+                      </div>
+                      <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[9px] font-extrabold">
+                        {wishlistCount} {wishlistCount === 1 ? 'saved' : 'saved'}
+                      </span>
+                    </button>
 
                     <button
                       onClick={() => {

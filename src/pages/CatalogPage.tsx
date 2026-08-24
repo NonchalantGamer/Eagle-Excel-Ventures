@@ -505,9 +505,11 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
                     {availableCategories.length - 1}
                   </span>
                 </div>
-                <ChevronDown className={`w-4 h-4 stroke-[2.5] transition-transform duration-200 ${
-                  isCategoryDropdownOpen ? 'rotate-180 text-[#F27D26]' : 'text-black'
-                }`} />
+                {isCategoryDropdownOpen ? (
+                  <X className="w-4 h-4 stroke-[2.5] text-[#F27D26] animate-scaleUp" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 stroke-[2.5] text-black" />
+                )}
               </button>
             </div>
 

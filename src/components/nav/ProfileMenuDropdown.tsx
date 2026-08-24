@@ -13,11 +13,13 @@ import {
   Layers,
   Sparkles,
   RefreshCw,
-  ShoppingCart
+  ShoppingCart,
+  Heart
 } from 'lucide-react';
 import { PageView } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
 
 interface ProfileMenuDropdownProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ export const ProfileMenuDropdown: React.FC<ProfileMenuDropdownProps> = ({
 }) => {
   const { currentUser, userProfile, isAdmin, logout } = useAuth();
   const { setIsCartOpen, itemCount } = useCart();
+  const { wishlistCount } = useWishlist();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [liveUnreadCount, setLiveUnreadCount] = useState(unreadSupportCount);
   const [coords, setCoords] = useState<{ top: number; right: number }>({ top: 70, right: 16 });
@@ -151,11 +154,11 @@ export const ProfileMenuDropdown: React.FC<ProfileMenuDropdownProps> = ({
 
   const content = (
     <div className="fixed inset-0 z-[99999] pointer-events-none" id="portal-profile-menu-container">
-      {/* Full-Screen Focus Backdrop with Frosted Blur & Click-to-Dismiss */}
+      {/* Focus Backdrop with Frosted Blur & Click-to-Dismiss (starts below header) */}
       <div
         id="profile-menu-backdrop-overlay"
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-black/60 dark:bg-black/80 backdrop-blur-xl transition-all duration-300 animate-fadeIn cursor-pointer pointer-events-auto"
+        className="fixed inset-0 top-14 sm:top-16 z-40 bg-black/60 dark:bg-black/80 backdrop-blur-xl transition-all duration-300 animate-fadeIn cursor-pointer pointer-events-auto"
         aria-label="Close profile menu"
       />
 
@@ -228,6 +231,26 @@ export const ProfileMenuDropdown: React.FC<ProfileMenuDropdownProps> = ({
               <span>My Account & Business Profile</span>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          </button>
+
+          <button
+            onClick={() => {
+              onNavigate('wishlist');
+              onClose();
+            }}
+            className="w-full py-2 px-3 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center gap-2.5">
+              <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
+              <span>Saved Products & Wishlist</span>
+            </div>
+            {wishlistCount > 0 ? (
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500 text-white shadow-xs">
+                {wishlistCount}
+              </span>
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+            )}
           </button>
 
           <button
