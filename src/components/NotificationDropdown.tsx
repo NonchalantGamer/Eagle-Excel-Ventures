@@ -63,57 +63,14 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
   const dropdownRef = useRef<HTMLDivElement>(null);
   const dropdownPanelRef = useRef<HTMLDivElement>(null);
 
-  // Background blur, backdrop overlay, and scroll freeze when notification dropdown is open
+  // Background blur and key dismissal when notification dropdown is open
   useEffect(() => {
     if (!isOpen) return;
 
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalHtmlOverflow = document.documentElement.style.overflow;
-    const originalTouchAction = document.body.style.touchAction;
-
-    // Lock scrolling on document & body
-    document.body.classList.add('menu-open-locked', 'modal-open-locked');
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-
-    // Blur main content and footer background
-    const mainContent = document.getElementById('main-content-area');
-    const footer = document.querySelector('footer');
-
-    if (mainContent) {
-      mainContent.classList.add('menu-backdrop-blurred');
-    }
-    if (footer) {
-      footer.classList.add('menu-backdrop-blurred');
-    }
-
-    // Freeze / block wheel scrolling on background (allow scrolling inside dropdown panel)
-    const handleWheel = (e: WheelEvent) => {
-      if (dropdownPanelRef.current && dropdownPanelRef.current.contains(e.target as Node)) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    // Freeze / block touch swipe scrolling on background (allow touch scrolling inside dropdown panel)
-    const handleTouchMove = (e: TouchEvent) => {
-      if (dropdownPanelRef.current && dropdownPanelRef.current.contains(e.target as Node)) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    // Keyboard navigation (Escape to dismiss, prevent scroll keys on background)
+    // Close on Escape
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsOpen(false);
-      } else if (['Space', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.code)) {
-        if (dropdownPanelRef.current && !dropdownPanelRef.current.contains(e.target as Node)) {
-          e.preventDefault();
-        }
       }
     };
 
@@ -124,26 +81,10 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
       }
     };
 
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
     window.addEventListener('keydown', handleKeyDown);
     document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
-      document.body.classList.remove('menu-open-locked', 'modal-open-locked');
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalHtmlOverflow;
-      document.body.style.touchAction = originalTouchAction;
-
-      if (mainContent) {
-        mainContent.classList.remove('menu-backdrop-blurred');
-      }
-      if (footer) {
-        footer.classList.remove('menu-backdrop-blurred');
-      }
-
-      window.removeEventListener('wheel', handleWheel);
-      window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -237,11 +178,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
           id="notification-backdrop-overlay"
           onClick={() => setIsOpen(false)}
           aria-hidden="true"
-          className="fixed inset-0 top-14 sm:top-16 z-40 bg-slate-950/45 dark:bg-black/65 backdrop-blur-md transition-all duration-300 animate-in fade-in cursor-pointer"
+          className="fixed inset-0 top-14 sm:top-16 z-[95] bg-black/40 dark:bg-black/60 backdrop-blur-xs transition-all duration-200 animate-fadeIn cursor-pointer"
         />
       )}
 
-      <div className={`relative ${className} ${isOpen ? 'z-50' : ''}`} id="notification-dropdown-wrapper" ref={dropdownRef}>
+      <div className={`relative ${className} ${isOpen ? 'z-[110]' : 'z-20'}`} id="notification-dropdown-wrapper" ref={dropdownRef}>
         {/* Bell / Close Trigger Button */}
         <button
           id="notification-bell-btn"
@@ -276,7 +217,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
           <div 
             ref={dropdownPanelRef}
             id="notification-dropdown-panel"
-            className="fixed sm:absolute right-3 sm:right-0 top-16 sm:top-auto sm:mt-3 w-[calc(100vw-24px)] sm:w-96 max-w-sm sm:max-w-md rounded-2xl bg-white dark:bg-[#18181b] border border-slate-200 dark:border-white/10 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+            className="absolute right-0 top-full mt-2 w-[calc(100vw-24px)] sm:w-96 max-w-sm sm:max-w-md rounded-2xl bg-white dark:bg-[#18181b] border border-slate-200 dark:border-white/10 shadow-2xl z-[120] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ring-1 ring-black/10 dark:ring-white/10"
           >
             {/* Header */}
             <div className="p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-zinc-900/50 flex items-center justify-between">

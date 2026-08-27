@@ -136,6 +136,9 @@ const MainApp: React.FC = () => {
     } catch {}
     return 'all';
   });
+  const [catalogInitialFilter, setCatalogInitialFilter] = useState<'all' | 'new' | 'bestsellers' | 'featured' | 'deals'>('all');
+  const [docsInitialTab, setDocsInitialTab] = useState<'nigeria' | 'cameroon' | 'payment_terms' | 'faq' | undefined>(undefined);
+  const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'signup'>('login');
   const [rfqInitialCategory, setRfqInitialCategory] = useState<string | undefined>(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -317,9 +320,18 @@ const MainApp: React.FC = () => {
   };
 
   // Navigation handler with state persistence and admin protection
-  const handleNavigate = (view: PageView, options?: { category?: string; product?: string }) => {
+  const handleNavigate = (
+    view: PageView, 
+    options?: { 
+      category?: string; 
+      product?: string;
+      filter?: 'all' | 'new' | 'bestsellers' | 'featured' | 'deals';
+      docTab?: 'nigeria' | 'cameroon' | 'payment_terms' | 'faq';
+    }
+  ) => {
     if ((view === 'admin' || view === 'manage-products') && !isAdmin && isHydrated && !authLoading) {
       setCurrentView('home');
+      setAuthModalInitialMode('login');
       setIsAuthModalOpen(true);
       return;
     }
@@ -353,6 +365,12 @@ const MainApp: React.FC = () => {
       try {
         sessionStorage.setItem('ee_catalog_category', options.category);
       } catch {}
+    }
+    if (options?.filter) {
+      setCatalogInitialFilter(options.filter);
+    }
+    if (options?.docTab) {
+      setDocsInitialTab(options.docTab);
     }
     if (options?.product) {
       setRfqInitialProduct(options.product);
@@ -478,11 +496,14 @@ const MainApp: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-zinc-100 flex flex-col font-sans selection:bg-[#F27D26] selection:text-black transition-colors duration-300">
       
       {/* Top Navigation Bar - Always Visible Sticky Header */}
-      <div className={`sticky top-0 z-40 w-full ${currentView === 'support' ? 'hidden lg:block' : ''}`}>
+      <div className={`sticky top-0 z-[100] w-full ${currentView === 'support' ? 'hidden lg:block' : ''}`}>
         <Navbar
           currentView={currentView}
           onNavigate={handleNavigate}
-          onOpenAuth={() => setIsAuthModalOpen(true)}
+          onOpenAuth={(mode) => {
+            setAuthModalInitialMode(mode || 'login');
+            setIsAuthModalOpen(true);
+          }}
           onOpenSupport={() => handleOpenSupport()}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           searchQuery={searchQuery}
@@ -521,12 +542,16 @@ const MainApp: React.FC = () => {
               products={products}
               searchQuery={searchQuery}
               onSelectProduct={handleSelectProduct}
-              onOpenAuth={() => setIsAuthModalOpen(true)}
+              onOpenAuth={() => {
+                setAuthModalInitialMode('login');
+                setIsAuthModalOpen(true);
+              }}
               onOpenSupport={handleOpenSupport}
               onSearchChange={setSearchQuery}
               onNavigate={handleNavigate}
               onRequestQuote={handleRequestQuote}
               initialCategory={catalogInitialCategory}
+              initialFilter={catalogInitialFilter}
               isLoading={isLoadingProducts}
             />
           </Suspense>
@@ -597,6 +622,7 @@ const MainApp: React.FC = () => {
             <DocsPage
               onNavigate={handleNavigate}
               onRequestQuote={handleRequestQuote}
+              initialTab={docsInitialTab}
             />
           </Suspense>
         )}
@@ -749,6 +775,7 @@ const MainApp: React.FC = () => {
           <AuthModal
             isOpen={isAuthModalOpen}
             onClose={() => setIsAuthModalOpen(false)}
+            initialMode={authModalInitialMode}
             onLoginSuccess={(userRole) => {
               setIsAuthModalOpen(false);
               if (userRole === 'admin') {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, 
   ShoppingCart, 
@@ -9,6 +9,7 @@ import {
   MessageSquare, 
   Layers, 
   ChevronRight, 
+  ChevronDown, 
   Sparkles, 
   HelpCircle, 
   Truck,
@@ -23,10 +24,20 @@ import {
   Check,
   PhoneCall,
   Globe2,
-  ChevronDown,
-  Heart
+  Heart,
+  Flame,
+  Star,
+  TrendingUp,
+  RotateCcw,
+  LogIn,
+  UserPlus,
+  Ship,
+  Boxes,
+  ArrowRight,
+  SunMedium,
+  Search
 } from 'lucide-react';
-import { Product, PageView } from '../../types';
+import { Product, PageView, Category } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -34,18 +45,19 @@ import { useTheme } from '../../context/ThemeContext';
 import { useCurrency, CURRENCIES, CurrencyCode } from '../../context/CurrencyContext';
 import { getBrandLogo } from '../../constants/branding';
 import { INITIAL_CATEGORIES } from '../../data/seedData';
+import { getCachedCategories, getCategoriesFromDatabase, subscribeToCategories } from '../../services/productService';
+import { CONTACT_INFO } from '../../constants/contact';
 
 interface MobileNavigationDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   currentView: PageView;
-  onNavigate: (view: PageView) => void;
-  onOpenAuth: () => void;
+  onNavigate: (view: PageView, options?: { category?: string; filter?: 'all' | 'new' | 'bestsellers' | 'featured' | 'deals'; docTab?: string }) => void;
+  onOpenAuth: (mode?: 'login' | 'signup') => void;
   onOpenSupport: () => void;
   onOpenSettings: () => void;
   unreadSupportCount?: number;
   products?: Product[];
-  onSelectCategoryFilter?: (category: string) => void;
 }
 
 export const MobileNavigationDrawer: React.FC<MobileNavigationDrawerProps> = ({
@@ -57,111 +69,139 @@ export const MobileNavigationDrawer: React.FC<MobileNavigationDrawerProps> = ({
   onOpenSupport,
   onOpenSettings,
   unreadSupportCount = 0,
-  products = [],
-  onSelectCategoryFilter
+  products = []
 }) => {
-  const { currentUser, userProfile, isAdmin, role, logout } = useAuth();
+  const { currentUser, userProfile, isAdmin, logout } = useAuth();
   const { itemCount, setIsCartOpen } = useCart();
   const { wishlistCount } = useWishlist();
   const { isDark, toggleTheme } = useTheme();
   const { currency, setCurrency } = useCurrency();
 
-  const [activeSegment, setActiveSegment] = useState<'main' | 'categories' | 'account'>('main');
-  const [expandedCategories, setExpandedCategories] = useState(true);
-  const [liveUnreadCount, setLiveUnreadCount] = useState(unreadSupportCount);
+  // Accordion state
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    shop: false,
+    categories: false,
+    help: false,
+    account: false
+  });
 
-  useEffect(() => {
-    setLiveUnreadCount(unreadSupportCount);
-  }, [unreadSupportCount]);
+  const [categories, setCategories] = useState<Category[]>(getCachedCategories);
+  const [mobileSearchQuery, setMobileSearchQuery] = useState('');
 
+  const toggleSection = (section: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  // Subscribe to live categories
   useEffect(() => {
-    const handleUnread = (e: Event) => {
-      const customEvent = e as CustomEvent<{ count: number }>;
-      if (customEvent.detail && typeof customEvent.detail.count === 'number') {
-        setLiveUnreadCount(customEvent.detail.count);
-      }
-    };
-    window.addEventListener('ee_customer_unread_count', handleUnread);
-    return () => window.removeEventListener('ee_customer_unread_count', handleUnread);
+    getCategoriesFromDatabase()
+      .then(cats => {
+        if (cats && cats.length > 0) setCategories(cats);
+      })
+      .catch(() => {});
+
+    const unsubscribe = subscribeToCategories((liveCats) => {
+      if (liveCats && liveCats.length > 0) setCategories(liveCats);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // When the menu is open: blur the main page background, lock body scrolling and disable all movement
+  // When the menu is open: manage body scroll lock and escape key dismissal
   useEffect(() => {
     if (isOpen) {
       const originalOverflow = document.body.style.overflow;
-      const originalTouchAction = document.body.style.touchAction;
-      
-      document.body.classList.add('menu-open-locked');
-      
-      // Target the main content area and footer to blur them
-      const mainContent = document.getElementById('main-content-area');
-      const footer = document.querySelector('footer');
-      
-      if (mainContent) {
-        mainContent.classList.add('menu-backdrop-blurred');
-      }
-      if (footer) {
-        footer.classList.add('menu-backdrop-blurred');
-      }
+      document.body.style.overflow = 'hidden';
 
-      // Escape key to dismiss the menu
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
+        if (e.key === 'Escape') onClose();
       };
       window.addEventListener('keydown', handleKeyDown);
 
       return () => {
-        document.body.classList.remove('menu-open-locked');
         document.body.style.overflow = originalOverflow;
-        document.body.style.touchAction = originalTouchAction;
-        if (mainContent) {
-          mainContent.classList.remove('menu-backdrop-blurred');
-        }
-        if (footer) {
-          footer.classList.remove('menu-backdrop-blurred');
-        }
         window.removeEventListener('keydown', handleKeyDown);
       };
     }
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  // Derive categories with product counts
+  const availableCategories = useMemo(() => {
+    const activeCats = categories.length > 0 ? categories : INITIAL_CATEGORIES;
+    const baseCategories = activeCats.filter(c => c.id !== 'all');
+    const existingCatIds = new Set(baseCategories.map(c => c.id.toLowerCase()));
+    const existingCatNames = new Set(baseCategories.map(c => c.name.toLowerCase()));
+    
+    const dynamicCategories = products
+      .filter(p => p.category && !existingCatIds.has(p.category.toLowerCase()) && !existingCatNames.has(p.category.toLowerCase()) && p.category !== 'all')
+      .map(p => ({
+        id: p.category,
+        name: p.category.charAt(0).toUpperCase() + p.category.slice(1).replace(/[-_]/g, ' '),
+        slug: p.category,
+        description: `Wholesale ${p.category} supplies`,
+        iconName: 'Boxes',
+        itemCount: products.filter(item => (item.category || '').toLowerCase() === p.category.toLowerCase()).length
+      }));
+
+    return [
+      ...baseCategories.map(c => ({
+        ...c,
+        itemCount: products.length > 0 
+          ? products.filter(p => {
+              const prodCat = (p.category || '').toLowerCase();
+              return prodCat === c.id.toLowerCase() || prodCat === c.name.toLowerCase() || prodCat === c.slug.toLowerCase();
+            }).length
+          : c.itemCount || 0
+      })),
+      ...dynamicCategories
+    ];
+  }, [categories, products]);
 
   const getCategoryIcon = (id: string) => {
-    switch (id) {
-      case 'electronics':
-        return <Cpu className="w-4 h-4 text-amber-500" />;
-      case 'building':
-        return <Wrench className="w-4 h-4 text-blue-500" />;
-      case 'textiles':
-        return <Sparkles className="w-4 h-4 text-purple-500" />;
-      case 'machinery':
-        return <Factory className="w-4 h-4 text-emerald-500" />;
-      case 'packaging':
-        return <Package className="w-4 h-4 text-orange-500" />;
-      default:
-        return <Layers className="w-4 h-4 text-[#F27D26]" />;
+    const norm = id.toLowerCase();
+    if (norm === 'solar' || norm.includes('solar') || norm.includes('energy') || norm.includes('renewable')) {
+      return <SunMedium className="w-4 h-4 text-amber-500" />;
+    }
+    if (norm === 'electronics' || norm.includes('audio') || norm.includes('tech')) {
+      return <Cpu className="w-4 h-4 text-blue-500" />;
+    }
+    if (norm === 'building' || norm.includes('hardware') || norm.includes('tools')) {
+      return <Wrench className="w-4 h-4 text-indigo-500" />;
+    }
+    if (norm === 'textiles' || norm.includes('garment') || norm.includes('fabric') || norm.includes('fashion')) {
+      return <Sparkles className="w-4 h-4 text-purple-500" />;
+    }
+    if (norm === 'machinery' || norm.includes('equipment') || norm.includes('factory')) {
+      return <Factory className="w-4 h-4 text-emerald-500" />;
+    }
+    if (norm === 'packaging' || norm.includes('merchandise') || norm.includes('carton')) {
+      return <Package className="w-4 h-4 text-[#F27D26]" />;
+    }
+    return <Boxes className="w-4 h-4 text-slate-500" />;
+  };
+
+  if (!isOpen) return null;
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (mobileSearchQuery.trim()) {
+      try {
+        sessionStorage.setItem('ee_catalog_search_term', mobileSearchQuery.trim());
+      } catch {}
+      onNavigate('catalog');
+      onClose();
     }
   };
 
-  const navLinks: { id: PageView; label: string; icon: any; badge?: string }[] = [
-    { id: 'home', label: 'Home Overview', icon: Building2 },
-    { id: 'catalog', label: 'Wholesale Catalog', icon: Layers },
-    { id: 'wishlist', label: 'Saved Wishlist', icon: Heart, badge: wishlistCount > 0 ? `${wishlistCount}` : undefined },
-    { id: 'supply-chain', label: 'Supply Chain & Shipping', icon: Truck, badge: 'LTL/FCL' },
-    { id: 'rfq', label: 'Custom Sourcing & RFQ', icon: FileText, badge: 'Quote in 60s' },
-    { id: 'docs', label: 'Import Compliance & Docs', icon: HelpCircle },
-    { id: 'about', label: 'About Eagle Excel', icon: UserIcon },
-  ];
-
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden" id="mobile-navigation-drawer">
+    <div data-portal-modal="true" className="fixed inset-0 z-[99999] isolate overflow-hidden" id="mobile-navigation-drawer">
       {/* Full Screen High-Focus Backdrop with Frosted Blur */}
       <div 
         onClick={onClose}
-        className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xl transition-all duration-300 animate-fadeIn z-40 cursor-pointer"
+        className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-md transition-all duration-300 animate-fadeIn z-40 cursor-pointer"
         aria-label="Close navigation menu"
       />
 
@@ -176,515 +216,587 @@ export const MobileNavigationDrawer: React.FC<MobileNavigationDrawerProps> = ({
                 <img 
                   src={getBrandLogo(isDark)} 
                   alt="Eagle Excel Ventures" 
-                  className="w-full h-full object-contain brand-logo-img" 
+                  className="w-full h-full object-contain"
                 />
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-black text-sm tracking-tight font-serif text-slate-950 dark:text-white">
-                    Eagle Excel
-                  </span>
-                  <span className="text-[9px] uppercase font-black tracking-wider px-1.5 py-0.5 rounded bg-[#F27D26]/15 text-[#e06d1a] dark:text-[#F27D26] border border-[#F27D26]/40">
+              <div className="min-w-0">
+                <h3 className="font-extrabold text-sm sm:text-base leading-tight tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
+                  Eagle Excel Ventures
+                  <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-[#F27D26] text-black shrink-0">
                     B2B
                   </span>
-                </div>
-                <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium block">
-                  Wholesale & Supply Distribution
-                </span>
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium truncate">
+                  Direct Factory Wholesale & Logistics
+                </p>
               </div>
             </div>
 
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
-              aria-label="Close menu"
+              id="mobile-drawer-close-btn"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Close navigation menu"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Segmented Tab Controls */}
-          <div className="px-4 pt-3 pb-1 border-b border-slate-200/80 dark:border-white/5 bg-slate-50/50 dark:bg-white/2 shrink-0">
-            <div className="grid grid-cols-3 gap-1 bg-slate-200/70 dark:bg-white/10 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setActiveSegment('main')}
-                className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer ${
-                  activeSegment === 'main'
-                    ? 'bg-white dark:bg-[#1a1a1a] text-slate-950 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Pages
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSegment('categories')}
-                className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer ${
-                  activeSegment === 'categories'
-                    ? 'bg-white dark:bg-[#1a1a1a] text-slate-950 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Categories
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSegment('account')}
-                className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer ${
-                  activeSegment === 'account'
-                    ? 'bg-white dark:bg-[#1a1a1a] text-slate-950 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Account
-              </button>
-            </div>
+          {/* Quick Search */}
+          <div className="p-3 bg-white dark:bg-[#121212] border-b border-slate-100 dark:border-white/5">
+            <form onSubmit={handleSearchSubmit} className="relative">
+              <input
+                type="text"
+                value={mobileSearchQuery}
+                onChange={(e) => setMobileSearchQuery(e.target.value)}
+                placeholder="Search products, SKUs, or categories..."
+                className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#F27D26]"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            </form>
           </div>
 
-          {/* Scrollable Content Body */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-            
-            {/* SEGMENT 1: MAIN NAVIGATION PAGES */}
-            {activeSegment === 'main' && (
-              <div className="space-y-3 animate-fadeIn">
-                {/* User Status / Sign In Mini-Bar */}
-                {currentUser ? (
-                  <div className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-between">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-xl bg-[#F27D26] text-black font-extrabold text-xs flex items-center justify-center shrink-0">
-                        {userProfile?.displayName?.charAt(0).toUpperCase() || 'U'}
-                      </div>
-                      <div className="truncate">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {userProfile?.displayName || 'Wholesale Buyer'}
-                        </p>
-                        <span className="text-[10px] text-[#F27D26] font-semibold">
-                          {isAdmin ? '🛡️ Administrator' : '🏢 Verified Wholesale Profile'}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        onNavigate('profile');
-                        onClose();
-                      }}
-                      className="py-1 px-2.5 rounded-lg text-xs font-bold bg-[#F27D26]/10 text-[#F27D26] hover:bg-[#F27D26]/20 transition-colors"
-                    >
-                      Profile
-                    </button>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-[#F27D26]/20 rounded-2xl flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">Wholesale Buyer Access</p>
-                      <p className="text-[10px] text-slate-500 dark:text-zinc-400">Unlock Tier 1-3 pricing & live freight</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        onOpenAuth();
-                        onClose();
-                      }}
-                      className="py-1.5 px-3 rounded-xl bg-[#F27D26] text-black font-extrabold text-xs shadow-xs"
-                    >
-                      Sign In
-                    </button>
-                  </div>
-                )}
+          {/* Drawer Body - Scrollable Accordion List */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2">
 
-                {/* Wholesale Cart Quick CTA */}
-                <button
-                  onClick={() => {
-                    setIsCartOpen(true);
-                    onClose();
-                  }}
-                  className="w-full p-3 rounded-2xl bg-[#F27D26]/10 hover:bg-[#F27D26]/15 border border-[#F27D26]/30 flex items-center justify-between text-xs transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2.5 font-bold text-[#F27D26]">
-                    <ShoppingCart className="w-4 h-4 text-[#F27D26]" />
-                    <span>View Wholesale Cart</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full bg-[#F27D26] text-black text-[10px] font-extrabold">
-                      {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                    </span>
-                    <ChevronRight className="w-3.5 h-3.5 text-[#F27D26] group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                </button>
-
-                {/* Primary Nav Page Buttons */}
-                <div className="space-y-1 pt-1">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-2 mb-1">
-                    Main Storefront
-                  </p>
-
-                  {navLinks.map((link) => {
-                    const IconComp = link.icon;
-                    const isActive = currentView === link.id;
-
-                    return (
-                      <button
-                        key={link.id}
-                        onClick={() => {
-                          onNavigate(link.id);
-                          onClose();
-                        }}
-                        className={`w-full py-2.5 px-3 rounded-xl text-left flex items-center justify-between text-xs font-bold transition-all cursor-pointer ${
-                          isActive
-                            ? 'bg-[#F27D26] text-black shadow-xs font-black'
-                            : 'text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-950 dark:hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <IconComp className={`w-4 h-4 ${isActive ? 'text-black' : 'text-[#F27D26]'}`} />
-                          <span>{link.label}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {link.badge && (
-                            <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
-                              isActive ? 'bg-black/20 text-black' : 'bg-[#F27D26]/15 text-[#e06d1a] dark:text-[#F27D26]'
-                            }`}>
-                              {link.badge}
-                            </span>
-                          )}
-                          {isActive && <span className="w-1.5 h-1.5 rounded-full bg-black" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Admin Quick Link if Admin */}
-                {isAdmin && (
-                  <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[#F27D26] px-2 mb-1">
-                      Operations Management
-                    </p>
-                    <button
-                      onClick={() => {
-                        onNavigate('admin');
-                        onClose();
-                      }}
-                      className="w-full py-2.5 px-3 rounded-xl bg-[#F27D26]/10 border border-[#F27D26]/25 text-left flex items-center justify-between text-xs font-bold text-[#F27D26]"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <ShieldCheck className="w-4 h-4 text-[#F27D26]" />
-                        <span>Admin Operations Console</span>
-                      </div>
-                      <span className="text-[9px] uppercase font-black bg-[#F27D26] text-black px-1.5 py-0.5 rounded">
-                        Admin
-                      </span>
-                    </button>
-                  </div>
-                )}
+            {/* 1. HOME */}
+            <button
+              onClick={() => {
+                onNavigate('home');
+                onClose();
+              }}
+              className={`w-full p-3 rounded-xl flex items-center justify-between font-bold text-xs transition-all cursor-pointer ${
+                currentView === 'home'
+                  ? 'bg-[#F27D26] text-black shadow-md'
+                  : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-800 dark:text-zinc-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Building2 className={`w-4 h-4 ${currentView === 'home' ? 'text-black' : 'text-[#F27D26]'}`} />
+                <span>Home</span>
               </div>
-            )}
+              <ChevronRight className={`w-4 h-4 ${currentView === 'home' ? 'text-black' : 'text-slate-400'}`} />
+            </button>
 
-            {/* SEGMENT 2: BROWSE BY CATEGORY */}
-            {activeSegment === 'categories' && (
-              <div className="space-y-3 animate-fadeIn">
-                <div className="flex items-center justify-between pb-1">
-                  <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                    Product Categories ({products.length} Products)
+            {/* 2. SHOP (Accordion) */}
+            <div className="rounded-xl border border-slate-200/80 dark:border-white/5 overflow-hidden bg-slate-50/50 dark:bg-white/[0.02]">
+              <button
+                onClick={() => toggleSection('shop')}
+                className="w-full p-3 flex items-center justify-between font-bold text-xs text-slate-900 dark:text-white cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Layers className="w-4 h-4 text-[#F27D26]" />
+                  <span>Shop</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#F27D26]/10 text-[#F27D26]">
+                    5 Views
                   </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${openSections.shop ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+
+              {openSections.shop && (
+                <div className="p-2 pt-0 space-y-1 border-t border-slate-200/50 dark:border-white/5 animate-fadeIn">
                   <button
                     onClick={() => {
-                      if (onSelectCategoryFilter) onSelectCategoryFilter('all');
-                      onNavigate('catalog');
+                      onNavigate('catalog', { filter: 'all', category: 'all' });
                       onClose();
                     }}
-                    className="text-xs font-bold text-[#F27D26] hover:underline"
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
                   >
-                    View All
+                    <div className="flex items-center gap-2.5">
+                      <Layers className="w-3.5 h-3.5 text-slate-400" />
+                      <span>All Products</span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                   </button>
-                </div>
 
-                <div className="space-y-2">
-                  {INITIAL_CATEGORIES.map((cat) => {
-                    const catCount = cat.id === 'all' 
-                      ? products.length 
-                      : products.filter(p => p.category === cat.id).length;
-
-                    return (
-                      <button
-                        key={cat.id}
-                        onClick={() => {
-                          if (onSelectCategoryFilter) onSelectCategoryFilter(cat.id);
-                          onNavigate('catalog');
-                          onClose();
-                        }}
-                        className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 transition-all flex items-start gap-3 cursor-pointer group"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          {getCategoryIcon(cat.id)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-[#F27D26] transition-colors">
-                              {cat.name}
-                            </p>
-                            <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
-                              {catCount} {catCount === 1 ? 'item' : 'items'}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-1 mt-0.5">
-                            {cat.description}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Sourcing Banner */}
-                <div className="p-3.5 bg-[#F27D26]/10 border border-[#F27D26]/30 rounded-2xl space-y-1 text-center">
-                  <p className="text-xs font-bold text-[#F27D26]">Looking for unlisted inventory?</p>
-                  <p className="text-[11px] text-slate-600 dark:text-zinc-400">
-                    We source full containers directly from verified global manufacturers.
-                  </p>
                   <button
                     onClick={() => {
-                      onNavigate('rfq');
+                      onNavigate('catalog', { filter: 'new', category: 'all' });
                       onClose();
                     }}
-                    className="mt-2 w-full py-2 rounded-xl bg-[#F27D26] text-black font-extrabold text-xs shadow-xs"
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
                   >
-                    Submit Sourcing RFQ
+                    <div className="flex items-center gap-2.5">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>New Arrivals</span>
+                    </div>
+                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                      NEW
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onNavigate('catalog', { filter: 'bestsellers', category: 'all' });
+                      onClose();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Best Sellers</span>
+                    </div>
+                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                      TOP
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onNavigate('catalog', { filter: 'featured', category: 'all' });
+                      onClose();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Star className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Featured Products</span>
+                    </div>
+                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400">
+                      FEATURED
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onNavigate('catalog', { filter: 'deals', category: 'all' });
+                      onClose();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Flame className="w-3.5 h-3.5 text-[#F27D26]" />
+                      <span>Deals & Discounts</span>
+                    </div>
+                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-[#F27D26]/20 text-[#e06d1a] dark:text-[#F27D26]">
+                      % OFF
+                    </span>
                   </button>
                 </div>
+              )}
+            </div>
+
+            {/* 3. CATEGORIES (Accordion) */}
+            <div className="rounded-xl border border-slate-200/80 dark:border-white/5 overflow-hidden bg-slate-50/50 dark:bg-white/[0.02]">
+              <button
+                onClick={() => toggleSection('categories')}
+                className="w-full p-3 flex items-center justify-between font-bold text-xs text-slate-900 dark:text-white cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Boxes className="w-4 h-4 text-[#F27D26]" />
+                  <span>Categories</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-zinc-300">
+                    {availableCategories.length}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${openSections.categories ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
+
+              {openSections.categories && (
+                <div className="p-2 pt-0 space-y-1 border-t border-slate-200/50 dark:border-white/5 animate-fadeIn max-h-56 overflow-y-auto">
+                  <button
+                    onClick={() => {
+                      onNavigate('catalog', { category: 'all' });
+                      onClose();
+                    }}
+                    className="w-full p-2 rounded-lg bg-[#F27D26]/10 text-[#F27D26] font-bold text-xs flex items-center justify-between cursor-pointer"
+                  >
+                    <span>Browse All Categories</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  {availableCategories.map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        onNavigate('catalog', { category: cat.id });
+                        onClose();
+                      }}
+                      className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        {getCategoryIcon(cat.id)}
+                        <span className="truncate">{cat.name}</span>
+                      </div>
+                      {typeof cat.itemCount === 'number' && (
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {cat.itemCount}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 4. DEALS (Direct Link) */}
+            <button
+              onClick={() => {
+                onNavigate('catalog', { filter: 'deals', category: 'all' });
+                onClose();
+              }}
+              className="w-full p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-[#F27D26]/15 to-transparent border border-[#F27D26]/30 flex items-center justify-between font-bold text-xs text-[#e06d1a] dark:text-[#F27D26] hover:bg-[#F27D26]/20 transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <Flame className="w-4 h-4 text-[#F27D26]" />
+                <span>Deals & Wholesale Discounts</span>
               </div>
-            )}
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#F27D26] text-black">
+                HOT SAVINGS
+              </span>
+            </button>
 
-            {/* SEGMENT 3: ACCOUNT & SETTINGS */}
-            {activeSegment === 'account' && (
-              <div className="space-y-4 animate-fadeIn">
-                {/* Account Details */}
-                {currentUser ? (
-                  <div className="p-3.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl space-y-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[#F27D26] text-black flex items-center justify-center font-extrabold text-sm shrink-0">
-                        {userProfile?.displayName?.charAt(0).toUpperCase() || 'U'}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {userProfile?.displayName || 'Wholesale Buyer'}
-                        </p>
-                        <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate font-mono">
-                          {currentUser.email}
-                        </p>
-                      </div>
+            {/* 5. HELP & SUPPORT (Accordion) */}
+            <div className="rounded-xl border border-slate-200/80 dark:border-white/5 overflow-hidden bg-slate-50/50 dark:bg-white/[0.02]">
+              <button
+                onClick={() => toggleSection('help')}
+                className="w-full p-3 flex items-center justify-between font-bold text-xs text-slate-900 dark:text-white cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <HelpCircle className="w-4 h-4 text-[#F27D26]" />
+                  <span>Help & Support</span>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${openSections.help ? 'rotate-180' : ''}`} />
+              </button>
+
+              {openSections.help && (
+                <div className="p-2 pt-0 space-y-1 border-t border-slate-200/50 dark:border-white/5 animate-fadeIn">
+                  <button
+                    onClick={() => {
+                      onNavigate('orders');
+                      onClose();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Truck className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Track My Order</span>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-1.5 pt-1">
-                      <button
-                        onClick={() => {
-                          onNavigate('profile');
-                          onClose();
-                        }}
-                        className="py-2 px-3 rounded-xl bg-slate-200 dark:bg-white/10 text-xs font-bold text-slate-800 dark:text-zinc-200 hover:bg-slate-300 dark:hover:bg-white/20 transition-all text-center"
-                      >
-                        My Profile
-                      </button>
-                      <button
-                        onClick={() => {
-                          onNavigate('orders');
-                          onClose();
-                        }}
-                        className="py-2 px-3 rounded-xl bg-slate-200 dark:bg-white/10 text-xs font-bold text-slate-800 dark:text-zinc-200 hover:bg-slate-300 dark:hover:bg-white/20 transition-all text-center"
-                      >
-                        My Orders
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        onNavigate('wishlist');
-                        onClose();
-                      }}
-                      className="w-full py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-xs font-bold text-rose-600 dark:text-rose-400 transition-all flex items-center justify-between cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Heart className="w-3.5 h-3.5 fill-rose-500/30" />
-                        <span>Saved Wishlist</span>
-                      </div>
-                      <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[9px] font-extrabold">
-                        {wishlistCount} {wishlistCount === 1 ? 'saved' : 'saved'}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setIsCartOpen(true);
-                        onClose();
-                      }}
-                      className="w-full py-2 px-3 rounded-xl bg-[#F27D26]/10 hover:bg-[#F27D26]/20 border border-[#F27D26]/30 text-xs font-bold text-[#F27D26] transition-all flex items-center justify-between cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2">
-                        <ShoppingCart className="w-3.5 h-3.5" />
-                        <span>Procurement Cart</span>
-                      </div>
-                      <span className="px-1.5 py-0.2 rounded-full bg-[#F27D26] text-black text-[9px] font-extrabold">
-                        {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="p-3.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl space-y-2">
-                    <p className="text-xs font-bold text-slate-900 dark:text-white">Sign In to Your Account</p>
-                    <p className="text-[11px] text-slate-600 dark:text-zinc-400">
-                      Manage orders, track freight containers, and submit custom quotations.
-                    </p>
-                    <button
-                      onClick={() => {
-                        onOpenAuth();
-                        onClose();
-                      }}
-                      className="w-full py-2 px-3 rounded-xl bg-[#F27D26] text-black font-extrabold text-xs shadow-xs flex items-center justify-center gap-1.5"
-                    >
-                      <UserIcon className="w-3.5 h-3.5" />
-                      Sign In / Register
-                    </button>
-                  </div>
-                )}
-
-                {/* Quick Theme Switcher */}
-                <div className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center">
-                      {isDark ? <Moon className="w-4 h-4 text-purple-400" /> : <Sun className="w-4 h-4 text-amber-500" />}
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 block">
-                        {isDark ? 'Dark Theme' : 'Light Theme'}
-                      </span>
-                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">
-                        {isDark ? 'Night high contrast' : 'Crisp daylight view'}
-                      </span>
-                    </div>
-                  </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
 
                   <button
-                    role="switch"
-                    aria-checked={isDark}
-                    onClick={toggleTheme}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#F27D26] ${
-                      isDark ? 'bg-[#F27D26]' : 'bg-slate-300 dark:bg-zinc-700'
-                    }`}
+                    onClick={() => {
+                      onNavigate('supply-chain');
+                      onClose();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
                   >
-                    <span
-                      className={`pointer-events-none inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
-                        isDark ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    >
-                      {isDark ? <Moon className="w-3 h-3 text-[#F27D26]" /> : <Sun className="w-3 h-3 text-amber-500" />}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Currency Quick Grid */}
-                <div className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Globe2 className="w-3.5 h-3.5 text-[#F27D26]" />
-                      <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                        Wholesale Currency
-                      </span>
+                    <div className="flex items-center gap-2.5">
+                      <Ship className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Shipping Information</span>
                     </div>
-                    <span className="text-[10px] text-[#F27D26] font-bold">
-                      {CURRENCIES[currency].symbol} {currency}
-                    </span>
-                  </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
 
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(Object.keys(CURRENCIES) as CurrencyCode[]).map((code) => (
-                      <button
-                        key={code}
-                        type="button"
-                        onClick={() => setCurrency(code)}
-                        className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                          currency === code
-                            ? 'bg-[#F27D26] text-black shadow-xs font-extrabold'
-                            : 'bg-white dark:bg-white/10 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/15'
-                        }`}
-                      >
-                        <span>{CURRENCIES[code].flag}</span>
-                        <span>{code}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  <button
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem('ee_docs_active_tab', 'payment_terms');
+                      } catch {}
+                      onNavigate('docs', { docTab: 'payment_terms' });
+                      onClose();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Returns & Refunds</span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
 
-                {/* Live Support & Settings Buttons */}
-                <div className="space-y-1">
+                  <button
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem('ee_docs_active_tab', 'faq');
+                      } catch {}
+                      onNavigate('docs', { docTab: 'faq' });
+                      onClose();
+                    }}
+                    className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <HelpCircle className="w-3.5 h-3.5 text-purple-500" />
+                      <span>FAQs</span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+
                   <button
                     onClick={() => {
                       onOpenSupport();
                       onClose();
                     }}
-                    className="w-full py-2.5 px-3 rounded-xl bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 flex items-center justify-between text-xs font-bold text-slate-800 dark:text-zinc-200 transition-all cursor-pointer"
+                    className="w-full p-2 rounded-lg bg-slate-900 dark:bg-white/10 text-white font-bold text-xs flex items-center justify-between cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <MessageSquare className="w-4 h-4 text-[#F27D26]" />
-                      <span>Live 24/7 B2B Support Channel</span>
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-3.5 h-3.5 text-[#F27D26]" />
+                      <span>Live 24/7 B2B Support Desk</span>
                     </div>
-                    {currentUser && liveUnreadCount > 0 ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white">
-                          {liveUnreadCount}
-                        </span>
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      </div>
-                    ) : (
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    {unreadSupportCount > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500 text-white">
+                        {unreadSupportCount}
+                      </span>
                     )}
                   </button>
+                </div>
+              )}
+            </div>
 
-                  <button
-                    onClick={() => {
-                      onOpenSettings();
-                      onClose();
-                    }}
-                    className="w-full py-2.5 px-3 rounded-xl bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Settings className="w-4 h-4 text-slate-400" />
-                      <span>App Preferences & Settings</span>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                  </button>
+            {/* 6. ACCOUNT (Accordion based on Auth) */}
+            <div className="rounded-xl border border-slate-200/80 dark:border-white/5 overflow-hidden bg-slate-50/50 dark:bg-white/[0.02]">
+              <button
+                onClick={() => toggleSection('account')}
+                className="w-full p-3 flex items-center justify-between font-bold text-xs text-slate-900 dark:text-white cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <UserIcon className="w-4 h-4 text-[#F27D26]" />
+                  <span>Account</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-zinc-300">
+                    {currentUser ? 'Signed In' : 'Guest'}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${openSections.account ? 'rotate-180' : ''}`} />
+                </div>
+              </button>
 
-                  {currentUser && (
-                    <button
-                      onClick={() => {
-                        logout();
-                        onClose();
-                      }}
-                      className="w-full py-2.5 px-3 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-500 flex items-center justify-between text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <LogOut className="w-4 h-4" />
-                        <span>Sign Out</span>
+              {openSections.account && (
+                <div className="p-2 pt-0 space-y-1.5 border-t border-slate-200/50 dark:border-white/5 animate-fadeIn">
+                  {currentUser ? (
+                    <>
+                      {/* Logged in header */}
+                      <div className="p-2.5 bg-slate-100 dark:bg-white/5 rounded-lg mb-1">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {userProfile?.displayName || 'Wholesale Buyer'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-zinc-400 font-mono truncate">
+                          {currentUser.email}
+                        </p>
+                        {isAdmin && (
+                          <span className="inline-block mt-1 text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-[#F27D26]/20 text-[#F27D26]">
+                            🛡️ Administrator
+                          </span>
+                        )}
                       </div>
-                    </button>
+
+                      <button
+                        onClick={() => {
+                          onNavigate('profile');
+                          onClose();
+                        }}
+                        className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <UserIcon className="w-3.5 h-3.5 text-[#F27D26]" />
+                          <span>My Profile</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          onNavigate('orders');
+                          onClose();
+                        }}
+                        className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Package className="w-3.5 h-3.5 text-[#F27D26]" />
+                          <span>My Orders</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          onNavigate('wishlist');
+                          onClose();
+                        }}
+                        className="w-full p-2 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-500 flex items-center justify-between text-xs font-semibold cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/20" />
+                          <span>Wishlist & Saved Items</span>
+                        </div>
+                        {wishlistCount > 0 ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-500 text-white">
+                            {wishlistCount}
+                          </span>
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          onOpenSettings();
+                          onClose();
+                        }}
+                        className="w-full p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-zinc-300 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Settings className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Account Settings</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+
+                      {isAdmin && (
+                        <div className="pt-1.5 border-t border-slate-200/50 dark:border-white/5 space-y-1">
+                          <button
+                            onClick={() => {
+                              onNavigate('admin');
+                              onClose();
+                            }}
+                            className="w-full p-2 rounded-lg bg-[#F27D26]/10 text-[#F27D26] font-bold text-xs flex items-center justify-between cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <ShieldCheck className="w-3.5 h-3.5 text-[#F27D26]" />
+                              <span>Admin Operations Portal</span>
+                            </div>
+                            <span className="text-[8px] uppercase font-black px-1.5 py-0.2 rounded bg-[#F27D26]/20">
+                              Admin
+                            </span>
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          logout();
+                          onClose();
+                        }}
+                        className="w-full p-2 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-500 font-bold text-xs flex items-center justify-between cursor-pointer mt-1"
+                      >
+                        <div className="flex items-center gap-2">
+                          <LogOut className="w-3.5 h-3.5" />
+                          <span>Sign Out</span>
+                        </div>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          onOpenAuth('login');
+                          onClose();
+                        }}
+                        className="w-full py-2 px-3 rounded-lg bg-[#F27D26] hover:bg-[#e06d1a] text-black font-bold text-xs flex items-center justify-between cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <LogIn className="w-3.5 h-3.5" />
+                          <span>Sign In</span>
+                        </div>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          onOpenAuth('signup');
+                          onClose();
+                        }}
+                        className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-800 dark:text-zinc-200 font-bold text-xs flex items-center justify-between cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <UserPlus className="w-3.5 h-3.5 text-[#F27D26]" />
+                          <span>Create Account</span>
+                        </div>
+                        <span className="text-[9px] uppercase px-1.5 py-0.2 rounded bg-[#F27D26]/15 text-[#F27D26]">
+                          Register
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          onNavigate('orders');
+                          onClose();
+                        }}
+                        className="w-full py-2 px-3 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-zinc-300 text-xs font-semibold flex items-center justify-between cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Truck className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Track My Order</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+                    </>
                   )}
                 </div>
+              )}
+            </div>
 
+            {/* 7. CART (Action) */}
+            <button
+              onClick={() => {
+                setIsCartOpen(true);
+                onClose();
+              }}
+              className="w-full p-3 rounded-xl bg-slate-900 text-white dark:bg-white/10 hover:bg-black flex items-center justify-between font-bold text-xs transition-all cursor-pointer shadow-md"
+            >
+              <div className="flex items-center gap-3">
+                <ShoppingCart className="w-4 h-4 text-[#F27D26]" />
+                <span>Procurement Cart</span>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-[#F27D26] text-black">
+                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                </span>
+                <ChevronRight className="w-4 h-4 text-[#F27D26]" />
+              </div>
+            </button>
 
-            {/* Wholesale Logistics Guarantee Footer Card */}
-            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 space-y-1 text-[11px] text-slate-600 dark:text-zinc-400">
-              <div className="font-bold text-slate-900 dark:text-zinc-200 flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5 text-[#F27D26]" />
-                <span>Eagle Excel Logistics SLA</span>
+          </div>
+
+          {/* Drawer Footer - Quick Preferences & Support */}
+          <div className="p-3 sm:p-4 bg-slate-50 dark:bg-[#0d0d0d] border-t border-slate-200 dark:border-white/5 shrink-0 space-y-2.5">
+            
+            {/* Currency and Theme Controls */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                {(Object.keys(CURRENCIES) as CurrencyCode[]).map(code => (
+                  <button
+                    key={code}
+                    onClick={() => setCurrency(code)}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer ${
+                      currency === code
+                        ? 'bg-[#F27D26] text-black shadow-xs'
+                        : 'bg-white dark:bg-white/5 text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-white/10'
+                    }`}
+                  >
+                    {CURRENCIES[code].flag} {code}
+                  </button>
+                ))}
               </div>
-              <p className="text-[10px]">
-                Free freight on orders &gt; $1,500. Lagos & Douala direct warehouse fulfillment.
-              </p>
+
+              <button
+                onClick={toggleTheme}
+                className="p-1.5 rounded-lg bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-zinc-300 hover:text-[#F27D26] transition-colors cursor-pointer"
+                aria-label="Toggle Theme"
+              >
+                {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+              </button>
+            </div>
+
+            {/* Helpline */}
+            <div className="pt-2 border-t border-slate-200/60 dark:border-white/5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
+              <span className="font-medium">Direct Trade Helpline:</span>
+              <a 
+                href={`tel:${CONTACT_INFO.nigeria.phoneRaw}`}
+                className="font-bold text-[#F27D26] hover:underline"
+              >
+                {CONTACT_INFO.nigeria.phoneDisplay}
+              </a>
             </div>
 
           </div>
+
         </div>
       </div>
     </div>

@@ -21,13 +21,16 @@ import { PageView } from '../types';
 interface DocsPageProps {
   onNavigate: (view: PageView) => void;
   onRequestQuote: (category?: string, productName?: string) => void;
+  initialTab?: 'nigeria' | 'cameroon' | 'payment_terms' | 'faq';
 }
 
 export const DocsPage: React.FC<DocsPageProps> = ({
   onNavigate,
-  onRequestQuote
+  onRequestQuote,
+  initialTab
 }) => {
   const [activeTab, setActiveTab] = useState<'nigeria' | 'cameroon' | 'payment_terms' | 'faq'>(() => {
+    if (initialTab) return initialTab;
     try {
       if (typeof window !== 'undefined') {
         const stored = sessionStorage.getItem('ee_docs_active_tab');
@@ -39,6 +42,12 @@ export const DocsPage: React.FC<DocsPageProps> = ({
     } catch {}
     return 'nigeria';
   });
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   useEffect(() => {
     try {

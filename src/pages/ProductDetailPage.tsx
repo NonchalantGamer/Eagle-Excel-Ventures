@@ -36,6 +36,7 @@ import { useCurrency } from '../context/CurrencyContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useOrders } from '../context/OrderContext';
 import { useToast } from '../components/Toast';
+import { useScrollReveal } from '../hooks/useScrollReveal';
 import { ProductCard } from '../components/ProductCard';
 import { ProductReviewsSection } from '../components/ProductReviewsSection';
 import { getProductReviews, calculateReviewSummary } from '../services/reviewService';
@@ -76,6 +77,9 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [liveReviewsCount, setLiveReviewsCount] = useState<number>(() => product?.reviewsCount || 0);
 
   const reviewsSectionRef = useRef<HTMLDivElement | null>(null);
+
+  // Initialize scroll reveal observer
+  useScrollReveal([product?.id]);
 
   // Sync state when product changes
   useEffect(() => {
@@ -223,7 +227,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     <div id="product-detail-page-container" className="w-full max-w-7xl mx-auto space-y-8 pb-16 animate-fadeIn">
       
       {/* 1. BREADCRUMBS & TOP NAV BAR */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-white/10 pb-4">
+      <div className="reveal-on-scroll flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-white/10 pb-4">
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-zinc-400">
           <button
             type="button"
@@ -292,7 +296,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
         
         {/* LEFT COLUMN (lg:cols-6 / 7): Interactive Gallery & Media Display */}
-        <div className="lg:col-span-6 space-y-4">
+        <div id="product-detail-media-gallery" className="lg:col-span-6 space-y-4 reveal-on-scroll stagger-1">
           
           {/* Main Visual Display */}
           <div className="relative rounded-3xl overflow-hidden bg-slate-100 dark:bg-[#141414] border border-slate-200 dark:border-white/10 aspect-square sm:aspect-[4/3] flex items-center justify-center group shadow-md">
@@ -406,7 +410,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
         </div>
 
         {/* RIGHT COLUMN (lg:cols-6): Wholesale Specifications & Interactive Order Builder */}
-        <div className="lg:col-span-6 space-y-6">
+        <div id="product-detail-info-column" className="lg:col-span-6 space-y-6 reveal-on-scroll stagger-2">
           
           {/* Header Metadata: SKU + Category + Rating */}
           <div className="space-y-2">
@@ -631,7 +635,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       </div>
 
       {/* 3. STRUCTURED PRODUCT INFORMATION TABS SECTION */}
-      <div className="pt-6 space-y-6">
+      <div id="product-detail-tabs-section" className="pt-6 space-y-6 reveal-on-scroll stagger-3">
         
         {/* Navigation Tabs Bar */}
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 overflow-x-auto pb-1">
@@ -864,7 +868,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       </div>
 
       {/* 4. "OTHER PRODUCTS YOU MAY BE INTERESTED IN" (RECOMMENDED PRODUCTS SECTION) */}
-      <section id="related-products-section" className="pt-10 space-y-6 border-t border-slate-200 dark:border-white/10">
+      <section id="related-products-section" className="pt-10 space-y-6 border-t border-slate-200 dark:border-white/10 reveal-on-scroll stagger-4">
         
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

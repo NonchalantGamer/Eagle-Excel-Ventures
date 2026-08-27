@@ -69,7 +69,6 @@ header,
 .fixed-gpu-layer {
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  transform: translateZ(0);
 }
 
 /* Scrollbars for Light & Dark Themes */
@@ -444,30 +443,17 @@ html.dark .skeleton-shimmer::after {
    MENU OPEN: BACKGROUND BLUR & MOVEMENT FREEZE
    ========================================================= */
 .menu-backdrop-blurred {
-  filter: blur(10px) brightness(0.82) saturate(0.85);
-  transform: scale(0.995);
   pointer-events: none !important;
   user-select: none !important;
   touch-action: none !important;
-  transition: filter 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: filter, transform;
 }
 
-html.dark .menu-backdrop-blurred {
-  filter: blur(10px) brightness(0.65) saturate(0.8);
-}
-
-body.menu-open-locked,
-body.modal-open-locked,
-body.notification-open-locked {
+body.modal-open-locked {
   overflow: hidden !important;
   overscroll-behavior: none !important;
   touch-action: none !important;
-  user-select: none !important;
 }
 
-html:has(body.notification-open-locked),
-html:has(body.menu-open-locked),
 html:has(body.modal-open-locked) {
   overflow: hidden !important;
   overscroll-behavior: none !important;

@@ -49,6 +49,7 @@ interface CatalogPageProps {
   onNavigate: (view: PageView) => void;
   onRequestQuote: (category?: string, productName?: string) => void;
   initialCategory?: string;
+  initialFilter?: 'all' | 'new' | 'bestsellers' | 'featured' | 'deals';
   isLoading?: boolean;
 }
 
@@ -64,11 +65,13 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
   onNavigate,
   onRequestQuote,
   initialCategory = 'all',
+  initialFilter = 'all',
   isLoading = false
 }) => {
   const { formatPrice, currentCurrencyConfig } = useCurrency();
   const { recentSearches, addSearch } = useSearchHistory();
   const [categories, setCategories] = useState<Category[]>(getCachedCategories);
+  const [activeFilterPreset, setActiveFilterPreset] = useState<'all' | 'new' | 'bestsellers' | 'featured' | 'deals'>(initialFilter);
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
     if (initialCategory && initialCategory !== 'all') return initialCategory;
     try {
@@ -79,7 +82,11 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
     } catch {}
     return initialCategory || 'all';
   });
-  const [sortBy, setSortBy] = useState<'recommended' | 'price_asc' | 'price_desc' | 'discount_desc' | 'moq_asc'>('recommended');
+  const [sortBy, setSortBy] = useState<'recommended' | 'price_asc' | 'price_desc' | 'discount_desc' | 'moq_asc'>(() => {
+    if (initialFilter === 'deals') return 'discount_desc';
+    if (initialFilter === 'bestsellers') return 'moq_asc';
+    return 'recommended';
+  });
   const [inStockOnly, setInStockOnly] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'compact'>('grid');
@@ -160,6 +167,17 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
       setSelectedCategory(initialCategory);
     }
   }, [initialCategory]);
+
+  useEffect(() => {
+    if (initialFilter) {
+      setActiveFilterPreset(initialFilter);
+      if (initialFilter === 'deals') {
+        setSortBy('discount_desc');
+      } else if (initialFilter === 'bestsellers') {
+        setSortBy('moq_asc');
+      }
+    }
+  }, [initialFilter]);
 
   // Keyboard escape key listener to close category menu
   useEffect(() => {
@@ -259,10 +277,14 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
     const scored = products.map(product => {
       const matchesCategory = isCategoryMatch(product.category, selectedCategory);
       const matchesStock = !inStockOnly || product.stock > 0;
+      let matchesPreset = true;
+      if (activeFilterPreset === 'featured') {
+        matchesPreset = !!product.isFeatured;
+      }
       
       const matchResult = scoreProductMatch(product, trimmedQuery);
       const matchesSearch = trimmedQuery.length === 0 || matchResult.score > 0;
-      const isIncluded = matchesCategory && matchesSearch && matchesStock;
+      const isIncluded = matchesCategory && matchesSearch && matchesStock && matchesPreset;
 
       return {
         product,
@@ -438,6 +460,30 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Active Filter Preset Banner (if not 'all') */}
+      {activeFilterPreset !== 'all' && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-[#F27D26]/10 border border-[#F27D26]/30 text-xs text-slate-800 dark:text-zinc-200 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#F27D26]" />
+            <span>
+              Active Filter: <strong className="text-[#e06d1a] dark:text-[#F27D26] uppercase font-bold">{
+                activeFilterPreset === 'new' ? 'New Arrivals' :
+                activeFilterPreset === 'bestsellers' ? 'Best Sellers' :
+                activeFilterPreset === 'featured' ? 'Featured Products' :
+                activeFilterPreset === 'deals' ? 'Deals & Discounts' : activeFilterPreset
+              }</strong>
+            </span>
+          </div>
+          <button
+            onClick={() => setActiveFilterPreset('all')}
+            className="flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-zinc-400 hover:text-slate-950 dark:hover:text-white px-2 py-1 rounded-lg bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <X className="w-3 h-3" />
+            <span>Show All Products</span>
+          </button>
+        </div>
+      )}
 
       {/* Quick Category Chips Strip */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
