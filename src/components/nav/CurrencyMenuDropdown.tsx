@@ -39,7 +39,7 @@ export const CurrencyMenuDropdown: React.FC<CurrencyMenuDropdownProps> = ({
     <div
       ref={dropdownRef}
       id="desktop-currency-dropdown-popover"
-      className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-[#141414] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-3 z-[120] animate-fadeIn backdrop-blur-md text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
+      className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-[#141414] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-3 z-[120] animate-dropdownSlideDown text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
     >
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-slate-100 dark:border-white/5 mb-2">
         <Globe2 className="w-3.5 h-3.5 text-[#F27D26]" />

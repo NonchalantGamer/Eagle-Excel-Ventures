@@ -370,6 +370,36 @@ html.dark .brand-logo-img {
   animation: fadeIn 0.2s ease-out forwards;
 }
 
+@keyframes dropdownSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-dropdownSlideDown {
+  animation: dropdownSlideDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes dropdownItemFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-dropdown-item {
+  animation: dropdownItemFade 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 @keyframes scaleUp {
   from {
     opacity: 0;

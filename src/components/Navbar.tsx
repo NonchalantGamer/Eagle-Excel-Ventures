@@ -220,7 +220,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header id="main-header" ref={navBarRef} className="w-full bg-white/95 dark:bg-[#101010]/95 backdrop-blur-xl border-b border-slate-200/90 dark:border-white/5 text-slate-900 dark:text-zinc-100 transition-colors duration-300 shadow-xs">
+    <header id="main-header" ref={navBarRef} className="w-full bg-white dark:bg-[#101010] border-b border-slate-200 dark:border-white/5 text-slate-900 dark:text-zinc-100 transition-colors duration-300 shadow-xs">
       
       {/* ------------------------------------------------------------- */}
       {/* TOP BAR: Brand Logo | Search Bar | Utilities & Actions        */}
@@ -375,6 +375,38 @@ export const Navbar: React.FC<NavbarProps> = ({
               onNavigate={(v) => { onNavigate(v); closeAllDropdowns(); }} 
               onOpenAuth={() => onOpenAuth('login')} 
             />
+
+            {/* Wholesale Profile Icon Button (Takes user to profile dashboard) */}
+            <button
+              id="header-profile-action-btn"
+              type="button"
+              onClick={() => {
+                if (!currentUser) {
+                  onOpenAuth('login');
+                } else {
+                  onNavigate('profile');
+                }
+                closeAllDropdowns();
+              }}
+              title={currentUser ? (userProfile?.displayName ? `${userProfile.displayName}'s Profile` : 'Wholesale Profile') : 'Sign In to Wholesale Profile'}
+              aria-label="User Profile"
+              className={`relative p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl transition-all cursor-pointer flex items-center justify-center group shrink-0 ${
+                currentView === 'profile'
+                  ? 'bg-[#F27D26]/20 text-[#F27D26] ring-2 ring-[#F27D26]/50 shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-zinc-200'
+              }`}
+            >
+              {userProfile?.avatarUrl || userProfile?.photoURL || currentUser?.photoURL ? (
+                <img 
+                  src={userProfile?.avatarUrl || userProfile?.photoURL || currentUser?.photoURL} 
+                  alt="Profile" 
+                  referrerPolicy="no-referrer"
+                  className="w-4 h-4 sm:w-5 sm:h-5 rounded-full object-cover ring-1 ring-[#F27D26]/40 group-hover:ring-[#F27D26] transition-all"
+                />
+              ) : (
+                <UserIcon className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:scale-110 text-slate-700 dark:text-zinc-200 group-hover:text-[#F27D26]" />
+              )}
+            </button>
 
             {/* Mobile / Tablet Menu Button */}
             <button

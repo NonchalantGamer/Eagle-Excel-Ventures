@@ -142,7 +142,7 @@ export const CategoriesMenuDropdown: React.FC<CategoriesMenuDropdownProps> = ({
     <div
       ref={dropdownRef}
       id="desktop-categories-menu-dropdown"
-      className="absolute left-0 top-full mt-2 w-[620px] bg-white/95 dark:bg-[#141414]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-4 z-[120] animate-fadeIn text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
+      className="absolute left-0 top-full mt-2 w-[620px] bg-white dark:bg-[#141414] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-4 z-[120] animate-dropdownSlideDown text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between px-2 pb-2.5 mb-2.5 border-b border-slate-100 dark:border-white/5">

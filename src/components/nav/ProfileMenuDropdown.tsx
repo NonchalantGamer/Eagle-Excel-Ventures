@@ -98,7 +98,7 @@ export const ProfileMenuDropdown: React.FC<ProfileMenuDropdownProps> = ({
     <div
       ref={dropdownRef}
       id="desktop-profile-menu-dropdown"
-      className="absolute right-0 top-full mt-2 w-80 sm:w-88 max-h-[calc(100vh-80px)] overflow-y-auto bg-white/95 dark:bg-[#141414]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-3.5 z-[120] animate-fadeIn text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
+      className="absolute right-0 top-full mt-2 w-80 sm:w-88 max-h-[calc(100vh-80px)] overflow-y-auto bg-white dark:bg-[#141414] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-3.5 z-[120] animate-dropdownSlideDown text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
       onClick={(e) => e.stopPropagation()}
     >
       {/* User Info Header */}

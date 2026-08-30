@@ -85,7 +85,7 @@ export const SearchAutocompleteDropdown: React.FC<SearchAutocompleteDropdownProp
   return (
     <div 
       id={isMobile ? 'mobile-search-autocomplete-dropdown' : 'header-search-autocomplete-dropdown'}
-      className="absolute top-full left-0 right-0 mt-1.5 bg-white/95 dark:bg-[#141414]/95 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[120] animate-fadeIn divide-y divide-slate-100 dark:divide-white/5 ring-1 ring-black/10 dark:ring-white/10"
+      className="absolute top-full left-0 right-0 mt-1.5 bg-white dark:bg-[#141414] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[120] animate-dropdownSlideDown divide-y divide-slate-100 dark:divide-white/5 ring-1 ring-black/10 dark:ring-white/10"
     >
       {/* 1. STATE A: Empty Query - Show Recent Searches (last 5) & Popular B2B Queries */}
       {!trimmedQuery ? (

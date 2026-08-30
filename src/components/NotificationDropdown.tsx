@@ -217,10 +217,10 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
           <div 
             ref={dropdownPanelRef}
             id="notification-dropdown-panel"
-            className="absolute right-0 top-full mt-2 w-[calc(100vw-24px)] sm:w-96 max-w-sm sm:max-w-md rounded-2xl bg-white dark:bg-[#18181b] border border-slate-200 dark:border-white/10 shadow-2xl z-[120] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ring-1 ring-black/10 dark:ring-white/10"
+            className="absolute right-0 top-full mt-2 w-[calc(100vw-24px)] sm:w-96 max-w-sm sm:max-w-md rounded-2xl bg-white dark:bg-[#141414] border border-slate-200 dark:border-white/10 shadow-2xl z-[120] overflow-hidden animate-dropdownSlideDown ring-1 ring-black/10 dark:ring-white/10"
           >
             {/* Header */}
-            <div className="p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-[#1a1a1a] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                   <Bell className="w-4 h-4 text-[#F27D26]" />

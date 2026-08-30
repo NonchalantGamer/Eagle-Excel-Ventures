@@ -79,7 +79,7 @@ export const AccountMenuDropdown: React.FC<AccountMenuDropdownProps> = ({
       <div
         ref={dropdownRef}
         id="desktop-account-menu-dropdown"
-        className="absolute right-0 top-full mt-2 w-80 max-h-[calc(100vh-80px)] overflow-y-auto bg-white/95 dark:bg-[#141414]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-3.5 z-[120] animate-fadeIn text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
+        className="absolute right-0 top-full mt-2 w-80 max-h-[calc(100vh-80px)] overflow-y-auto bg-white dark:bg-[#141414] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-3.5 z-[120] animate-dropdownSlideDown text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
         onClick={(e) => e.stopPropagation()}
       >
         {/* User Card Header */}
@@ -256,7 +256,7 @@ export const AccountMenuDropdown: React.FC<AccountMenuDropdownProps> = ({
     <div
       ref={dropdownRef}
       id="desktop-account-menu-dropdown-guest"
-      className="absolute right-0 top-full mt-2 w-76 bg-white/95 dark:bg-[#141414]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-3.5 z-[120] animate-fadeIn text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
+      className="absolute right-0 top-full mt-2 w-76 bg-white dark:bg-[#141414] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-3.5 z-[120] animate-dropdownSlideDown text-slate-900 dark:text-zinc-100 ring-1 ring-black/10 dark:ring-white/10"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 bg-gradient-to-br from-amber-500/10 to-[#F27D26]/10 dark:from-[#F27D26]/15 dark:to-transparent rounded-xl border border-[#F27D26]/20 mb-2.5">

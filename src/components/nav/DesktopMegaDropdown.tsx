@@ -165,7 +165,7 @@ export const DesktopMegaDropdown: React.FC<DesktopMegaDropdownProps> = ({
       id="desktop-header-mega-dropdown"
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="absolute top-full left-0 right-0 w-full bg-slate-50/90 dark:bg-[#141414]/90 backdrop-blur-xl border-none shadow-none z-[120] animate-fadeIn text-slate-900 dark:text-zinc-100 transition-all duration-300 ease-out"
+      className="absolute top-full left-0 right-0 w-full bg-white dark:bg-[#141414] border-b border-slate-200 dark:border-white/10 shadow-2xl z-[120] animate-dropdownSlideDown text-slate-900 dark:text-zinc-100 transition-all duration-300 ease-out"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -175,7 +175,7 @@ export const DesktopMegaDropdown: React.FC<DesktopMegaDropdownProps> = ({
           {/* VIEW 1: SHOP SPECIFIC DROPDOWN                                            */}
           {/* ========================================================================= */}
           {activeSection === 'shop' && (
-            <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start h-full animate-fadeIn">
+            <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start h-full animate-dropdownSlideDown">
               
               {/* Column 1: Featured Collections */}
               <div className="col-span-3 space-y-2">
@@ -464,7 +464,7 @@ export const DesktopMegaDropdown: React.FC<DesktopMegaDropdownProps> = ({
           {/* VIEW 2: CATEGORIES SPECIFIC DROPDOWN                                      */}
           {/* ========================================================================= */}
           {activeSection === 'categories' && (
-            <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start h-full animate-fadeIn">
+            <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start h-full animate-dropdownSlideDown">
               
               {/* Column 1: Primary Power & Electronics */}
               <div className="col-span-3 space-y-2">
@@ -654,7 +654,7 @@ export const DesktopMegaDropdown: React.FC<DesktopMegaDropdownProps> = ({
           {/* VIEW 3: HELP & SUPPORT SPECIFIC DROPDOWN                                  */}
           {/* ========================================================================= */}
           {activeSection === 'help' && (
-            <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start h-full animate-fadeIn">
+            <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start h-full animate-dropdownSlideDown">
               
               {/* Column 1: Order & Tracking */}
               <div className="col-span-3 space-y-2">
@@ -905,7 +905,7 @@ export const DesktopMegaDropdown: React.FC<DesktopMegaDropdownProps> = ({
           {/* VIEW 4: ACCOUNT SPECIFIC DROPDOWN                                         */}
           {/* ========================================================================= */}
           {activeSection === 'account' && (
-            <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start h-full animate-fadeIn">
+            <div className="grid grid-cols-12 gap-6 lg:gap-8 items-start h-full animate-dropdownSlideDown">
               
               {/* Column 1: User Identity / Auth Options */}
               <div className="col-span-3 space-y-2">
