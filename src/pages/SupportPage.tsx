@@ -167,12 +167,12 @@ export const SupportPage: React.FC<SupportPageProps> = ({
 
   // Load customer orders for reference sidebar
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.uid) {
       getCustomerOrders(currentUser.uid).then(orders => {
         setCustomerOrders(orders);
       }).catch(() => {});
     }
-  }, [currentUser]);
+  }, [currentUser?.uid]);
 
   const onClearRef = useRef(onClearInitialInquiry);
   useEffect(() => {
@@ -184,12 +184,12 @@ export const SupportPage: React.FC<SupportPageProps> = ({
     if (initialProductInquiry) {
       setAttachedProduct(initialProductInquiry);
       setInputText(`Hello Operations Desk, I would like to inquire about bulk wholesale supply, sea container freight options, and volume tiered pricing for ${initialProductInquiry.name} (SKU: ${initialProductInquiry.sku}).`);
-      onClearRef.current?.();
+      setTimeout(() => onClearRef.current?.(), 0);
     } else if (initialCustomMessage) {
       setInputText(initialCustomMessage);
-      onClearRef.current?.();
+      setTimeout(() => onClearRef.current?.(), 0);
     }
-  }, [initialProductInquiry, initialCustomMessage]);
+  }, [initialProductInquiry?.id, initialCustomMessage]);
 
   // Real-time subscription to customer messages
   const seenSupportPageMsgIdsRef = useRef<Set<string>>(new Set());

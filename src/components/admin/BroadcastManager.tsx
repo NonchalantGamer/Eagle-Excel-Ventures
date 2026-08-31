@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Megaphone, 
   Send, 
@@ -198,18 +198,23 @@ export const BroadcastManager: React.FC<BroadcastManagerProps> = ({
     return () => unsubscribe();
   }, []);
 
+  const usersRef = useRef(users);
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
+
   // Update selection if prop changes
   useEffect(() => {
     if (initialSelectedUserId) {
       setIsComposerOpen(true);
       setTargetAudience('selected');
       setSelectedCustomerIds([initialSelectedUserId]);
-      const targetUser = users.find(u => u.id === initialSelectedUserId);
+      const targetUser = usersRef.current.find(u => u.id === initialSelectedUserId);
       if (targetUser) {
         setTitle(`📢 Direct Notice for ${targetUser.displayName || targetUser.companyName || 'Valued Buyer'}`);
       }
     }
-  }, [initialSelectedUserId, users]);
+  }, [initialSelectedUserId]);
 
   const handleApplyTemplate = (template: PresetTemplate) => {
     setTitle(template.title);

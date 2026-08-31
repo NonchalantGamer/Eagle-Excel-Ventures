@@ -339,11 +339,42 @@ html.dark .brand-logo-img {
 /* Animations */
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  50% { opacity: 0.72; }
 }
 
 .animate-pulse-subtle {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes row-pulse-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.table-row-refetch-pulse {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(242, 125, 38, 0.06) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: row-pulse-shimmer 2.2s infinite linear;
+}
+
+html.dark .table-row-refetch-pulse {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(242, 125, 38, 0.12) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: row-pulse-shimmer 2.2s infinite linear;
 }
 
 @keyframes slideInRight {

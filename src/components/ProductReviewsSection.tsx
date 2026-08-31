@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { 
   Star, 
   CheckCircle2, 
@@ -73,14 +73,19 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
   const reviewCommentId = useId();
   const photoUrlId = useId();
 
+  const onUpdateRatingRef = useRef(onUpdateProductRating);
+  useEffect(() => {
+    onUpdateRatingRef.current = onUpdateProductRating;
+  }, [onUpdateProductRating]);
+
   // Reload reviews when product changes or custom event fires
   useEffect(() => {
     const load = () => {
       const revs = getProductReviews(product.id);
       setReviews(revs);
       const summary = calculateReviewSummary(revs, product.rating, product.reviewsCount);
-      if (onUpdateProductRating && summary.totalReviews > 0) {
-        onUpdateProductRating(summary.averageRating, summary.totalReviews);
+      if (onUpdateRatingRef.current && summary.totalReviews > 0) {
+        onUpdateRatingRef.current(summary.averageRating, summary.totalReviews);
       }
     };
 

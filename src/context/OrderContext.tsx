@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { Order, OrderStatus } from '../types';
 import { subscribeToOrders, getLocalCachedOrders } from '../services/orderService';
 import { useAuth } from './AuthContext';
@@ -172,50 +172,82 @@ export const OrderProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const hasUnviewedChanges = unviewedStatusChangesCount > 0;
 
+  // Orders ref for stable access in callbacks without triggering effect loops
+  const ordersRef = useRef<Order[]>(orders);
+  ordersRef.current = orders;
+
   // Active counts
-  const activeOrdersCount = orders.filter(o => o.status !== 'cancelled' && o.status !== 'delivered').length;
-  const inTransitCount = orders.filter(o => o.status === 'shipped').length;
-  const processingCount = orders.filter(o => o.status === 'processing').length;
-  const pendingCount = orders.filter(o => o.status === 'pending').length;
-  const deliveredCount = orders.filter(o => o.status === 'delivered').length;
+  const activeOrdersCount = useMemo(() => orders.filter(o => o.status !== 'cancelled' && o.status !== 'delivered').length, [orders]);
+  const inTransitCount = useMemo(() => orders.filter(o => o.status === 'shipped').length, [orders]);
+  const processingCount = useMemo(() => orders.filter(o => o.status === 'processing').length, [orders]);
+  const pendingCount = useMemo(() => orders.filter(o => o.status === 'pending').length, [orders]);
+  const deliveredCount = useMemo(() => orders.filter(o => o.status === 'delivered').length, [orders]);
 
   // Mark all current order statuses as acknowledged/viewed
   const markOrdersAsViewed = useCallback(() => {
-    const newMap: AcknowledgedOrderMap = { ...acknowledgedMap };
-    orders.forEach(order => {
-      newMap[order.id] = {
-        status: order.status,
-        trackingNumber: order.trackingNumber,
-        carrier: order.carrier,
-        updatedAt: order.updatedAt || new Date().toISOString()
-      };
+    setAcknowledgedMap(prevMap => {
+      const newMap: AcknowledgedOrderMap = { ...prevMap };
+      let changed = false;
+      ordersRef.current.forEach(order => {
+        const existing = newMap[order.id];
+        if (
+          !existing ||
+          existing.status !== order.status ||
+          existing.trackingNumber !== order.trackingNumber ||
+          existing.carrier !== order.carrier
+        ) {
+          newMap[order.id] = {
+            status: order.status,
+            trackingNumber: order.trackingNumber,
+            carrier: order.carrier,
+            updatedAt: order.updatedAt || new Date().toISOString()
+          };
+          changed = true;
+        }
+      });
+      if (changed) {
+        saveAcknowledgedMap(newMap);
+        return newMap;
+      }
+      return prevMap;
     });
-    setAcknowledgedMap(newMap);
-    saveAcknowledgedMap(newMap);
     setLatestStatusChange(null);
-  }, [orders, acknowledgedMap]);
+  }, []);
 
   const getOrderById = useCallback((id: string) => {
-    return orders.find(o => o.id === id || o.orderNumber === id);
-  }, [orders]);
+    return ordersRef.current.find(o => o.id === id || o.orderNumber === id);
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    orders,
+    isLoading,
+    activeOrdersCount,
+    inTransitCount,
+    processingCount,
+    pendingCount,
+    deliveredCount,
+    unviewedStatusChangesCount,
+    hasUnviewedChanges,
+    latestStatusChange,
+    markOrdersAsViewed,
+    getOrderById
+  }), [
+    orders,
+    isLoading,
+    activeOrdersCount,
+    inTransitCount,
+    processingCount,
+    pendingCount,
+    deliveredCount,
+    unviewedStatusChangesCount,
+    hasUnviewedChanges,
+    latestStatusChange,
+    markOrdersAsViewed,
+    getOrderById
+  ]);
 
   return (
-    <OrderContext.Provider
-      value={{
-        orders,
-        isLoading,
-        activeOrdersCount,
-        inTransitCount,
-        processingCount,
-        pendingCount,
-        deliveredCount,
-        unviewedStatusChangesCount,
-        hasUnviewedChanges,
-        latestStatusChange,
-        markOrdersAsViewed,
-        getOrderById
-      }}
-    >
+    <OrderContext.Provider value={contextValue}>
       {children}
     </OrderContext.Provider>
   );

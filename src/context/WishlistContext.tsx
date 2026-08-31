@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Product, WishlistItem } from '../types';
 import { useAuth } from './AuthContext';
 import { useCart } from './CartContext';
@@ -212,20 +212,29 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   }, [wishlist, addMultipleToCart, showToast, setIsCartOpen]);
 
+  const contextValue = useMemo(() => ({
+    wishlist,
+    wishlistCount: wishlist.length,
+    isInWishlist,
+    addToWishlist,
+    removeFromWishlist,
+    toggleWishlist,
+    clearWishlist,
+    moveItemToCart,
+    moveAllToCart
+  }), [
+    wishlist,
+    isInWishlist,
+    addToWishlist,
+    removeFromWishlist,
+    toggleWishlist,
+    clearWishlist,
+    moveItemToCart,
+    moveAllToCart
+  ]);
+
   return (
-    <WishlistContext.Provider
-      value={{
-        wishlist,
-        wishlistCount: wishlist.length,
-        isInWishlist,
-        addToWishlist,
-        removeFromWishlist,
-        toggleWishlist,
-        clearWishlist,
-        moveItemToCart,
-        moveAllToCart
-      }}
-    >
+    <WishlistContext.Provider value={contextValue}>
       {children}
     </WishlistContext.Provider>
   );

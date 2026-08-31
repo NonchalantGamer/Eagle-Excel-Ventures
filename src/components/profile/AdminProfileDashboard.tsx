@@ -107,7 +107,7 @@ export const AdminProfileDashboard: React.FC<AdminProfileDashboardProps> = ({
       setDisplayName(currentUser.displayName || 'Joshua Egesi');
       setPhotoURL(currentUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80');
     }
-  }, [userProfile, currentUser]);
+  }, [userProfile?.id, userProfile?.updatedAt, currentUser?.uid]);
 
   const handleSaveProfile = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Package, 
@@ -23,13 +23,15 @@ import {
   Loader2,
   Trash2,
   ArrowUpDown,
-  SlidersHorizontal
+  SlidersHorizontal,
+  LayoutList,
+  Table as TableIcon
 } from 'lucide-react';
 import { Order, OrderStatus, Product, OrderItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useCurrency } from '../context/CurrencyContext';
-import { subscribeToOrders, getLocalCachedOrders, cancelOrder, deleteOrder } from '../services/orderService';
+import { subscribeToOrders, getLocalCachedOrders, getCustomerOrders, cancelOrder, deleteOrder } from '../services/orderService';
 import { getCachedProducts } from '../services/productService';
 import { initiateFlutterwavePayment } from '../services/flutterwave';
 import { useToast } from './Toast';
@@ -49,9 +51,15 @@ export const CustomerDashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('date_desc');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    return currentUser ? getLocalCachedOrders(currentUser.uid, false).length === 0 : false;
+  });
+  const [isRefetching, setIsRefetching] = useState<boolean>(false);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [retryingOrderId, setRetryingOrderId] = useState<string | null>(null);
+  const [reorderingOrderId, setReorderingOrderId] = useState<string | null>(null);
+  const [reorderingItemId, setReorderingItemId] = useState<string | null>(null);
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('Changed requirements');
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
@@ -63,20 +71,65 @@ export const CustomerDashboard: React.FC = () => {
     else setSelectedOrder(null);
   });
 
+  const currentUserId = currentUser?.uid;
+
+  const handleRefetch = useCallback(async (showFeedback = true) => {
+    if (!currentUserId) return;
+    setIsRefetching(true);
+    try {
+      const freshOrders = await getCustomerOrders(currentUserId);
+      if (freshOrders && Array.isArray(freshOrders)) {
+        setOrders(freshOrders);
+      }
+      if (showFeedback) {
+        showToast('Order history synchronized with live server records', 'success');
+      }
+    } catch (err) {
+      console.error('Failed to refetch order history:', err);
+    } finally {
+      setIsRefetching(false);
+      setIsLoading(false);
+    }
+  }, [currentUserId, showToast]);
+
+  const handleRefetchRef = useRef(handleRefetch);
+  handleRefetchRef.current = handleRefetch;
+
   useEffect(() => {
-    if (!currentUser) {
+    if (!currentUserId) {
       setOrders([]);
       setIsLoading(false);
+      setIsRefetching(false);
       return;
     }
 
-    const unsubscribe = subscribeToOrders(currentUser.uid, false, (fetchedOrders) => {
+    const cached = getLocalCachedOrders(currentUserId, false);
+    if (cached.length > 0) {
+      setOrders(cached);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
+    const unsubscribe = subscribeToOrders(currentUserId, false, (fetchedOrders) => {
       setOrders(fetchedOrders);
       setIsLoading(false);
+      setIsRefetching(false);
     });
 
-    return () => unsubscribe();
-  }, [currentUser]);
+    // Background refetch when user returns to window tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleRefetchRef.current(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [currentUserId]);
 
   const handleRetryPayment = async (order: Order) => {
     if (order.paymentStatus === 'paid' || order.status === 'cancelled') {
@@ -169,6 +222,8 @@ export const CustomerDashboard: React.FC = () => {
       return;
     }
 
+    setReorderingOrderId(order.id);
+
     const cachedProducts = getCachedProducts();
 
     const itemsToAdd = order.items.map(orderItem => {
@@ -201,10 +256,17 @@ export const CustomerDashboard: React.FC = () => {
     addMultipleToCart(itemsToAdd);
 
     const totalUnits = order.items.reduce((sum, item) => sum + item.quantity, 0);
-    showToast(`Added ${order.items.length} item(s) (${totalUnits} total units) from Order #${order.orderNumber} to your cart!`, 'success');
+    showToast(`Quick Reorder complete! Added ${order.items.length} item(s) (${totalUnits} units) from Order #${order.orderNumber} to your cart.`, 'success');
+
+    setTimeout(() => {
+      setReorderingOrderId(null);
+    }, 1500);
   };
 
   const handleReorderSingleItem = (orderItem: OrderItem) => {
+    const itemKey = orderItem.productId || orderItem.name;
+    setReorderingItemId(itemKey);
+
     const cachedProducts = getCachedProducts();
     const matched = cachedProducts.find(
       p => p.id === orderItem.productId || (p.sku && orderItem.sku && p.sku.toLowerCase() === orderItem.sku.toLowerCase())
@@ -228,6 +290,10 @@ export const CustomerDashboard: React.FC = () => {
 
     addToCart(product, orderItem.quantity);
     showToast(`Added ${orderItem.quantity}x ${orderItem.name} to your cart!`, 'success');
+
+    setTimeout(() => {
+      setReorderingItemId(null);
+    }, 1200);
   };
 
   const isDeletable = (order: Order) => order.status === 'cancelled' || order.paymentStatus === 'failed';
@@ -401,10 +467,57 @@ export const CustomerDashboard: React.FC = () => {
             ))}
           </div>
 
-          {/* Search & Sort Controls */}
-          <div className="flex flex-col sm:flex-row items-center gap-2.5 shrink-0">
+          {/* Search, Sort, View, and Sync Controls */}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {/* View Mode Toggle (Table / Card) */}
+            <div className="hidden sm:flex items-center p-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'table'
+                    ? 'bg-white dark:bg-[#202020] text-[#F27D26] shadow-xs'
+                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
+                }`}
+                title="Table view"
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Table</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'cards'
+                    ? 'bg-white dark:bg-[#202020] text-[#F27D26] shadow-xs'
+                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
+                }`}
+                title="Compact card view"
+              >
+                <LayoutList className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Cards</span>
+              </button>
+            </div>
+
+            {/* Manual Sync / Refetch Button */}
+            <button
+              id="sync-orders-btn"
+              type="button"
+              onClick={() => handleRefetch(true)}
+              disabled={isRefetching || isLoading}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60 ${
+                isRefetching
+                  ? 'border-[#F27D26]/40 bg-[#F27D26]/10 text-[#F27D26] shadow-xs ring-1 ring-[#F27D26]/30'
+                  : 'border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Sync live order records and carrier tracking status"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefetching ? 'animate-spin text-[#F27D26]' : ''}`} />
+              <span>{isRefetching ? 'Refetching...' : 'Sync Live'}</span>
+            </button>
+
             {/* Sort Dropdown */}
-            <div className="relative w-full sm:w-auto flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5">
+            <div className="relative flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5">
               <ArrowUpDown className="w-3.5 h-3.5 text-[#F27D26] shrink-0" />
               <label htmlFor="customer-sort-select" className="text-[11px] font-bold text-slate-500 dark:text-zinc-400 whitespace-nowrap">Sort:</label>
               <select
@@ -423,7 +536,7 @@ export const CustomerDashboard: React.FC = () => {
             </div>
 
             {/* Search Input */}
-            <div className="relative w-full sm:w-60">
+            <div className="relative w-full sm:w-56">
               <Search className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -445,7 +558,26 @@ export const CustomerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Orders List */}
+      {/* Subtle Refetching Notification Status Banner */}
+      {isRefetching && (
+        <div className="flex items-center justify-between px-4 py-2 bg-[#F27D26]/5 dark:bg-[#F27D26]/10 border border-[#F27D26]/20 rounded-2xl text-xs text-slate-700 dark:text-zinc-300 animate-fadeIn shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#F27D26] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#F27D26]"></span>
+            </span>
+            <span className="font-semibold text-slate-900 dark:text-zinc-100">
+              Refetching live order updates and freight tracking in the background...
+            </span>
+          </div>
+          <span className="text-[11px] text-[#F27D26] font-mono font-bold flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Active Sync
+          </span>
+        </div>
+      )}
+
+      {/* Orders List / Table Container */}
       {isLoading ? (
         <OrderListSkeleton count={4} />
       ) : processedOrders.length === 0 ? (
@@ -468,21 +600,221 @@ export const CustomerDashboard: React.FC = () => {
             </button>
           )}
         </div>
+      ) : viewMode === 'table' ? (
+        /* =========================================================================
+           TABLE VIEW: Full-Featured Order History Table with Subtle Loading Pulse
+           ========================================================================= */
+        <div className="bg-white dark:bg-[#141414] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#191919] text-slate-500 dark:text-zinc-400 font-bold uppercase text-[11px] tracking-wider">
+                  <th className="py-3.5 px-4">PO Number & Date</th>
+                  <th className="py-3.5 px-4">Order Status</th>
+                  <th className="py-3.5 px-4">Payment</th>
+                  <th className="py-3.5 px-4">Items Summary</th>
+                  <th className="py-3.5 px-4">Carrier & Tracking</th>
+                  <th className="py-3.5 px-4 text-right">Total</th>
+                  <th className="py-3.5 px-4 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                {processedOrders.map(order => (
+                  <tr
+                    key={order.id}
+                    onClick={() => setSelectedOrder(order)}
+                    className={`relative cursor-pointer transition-all duration-300 hover:bg-slate-50/80 dark:hover:bg-white/[0.03] group ${
+                      isRefetching
+                        ? 'table-row-refetch-pulse animate-pulse-subtle'
+                        : ''
+                    }`}
+                  >
+                    {/* Top Shimmer Loading Pulse Bar during Refetch */}
+                    {isRefetching && (
+                      <td colSpan={7} className="p-0 h-0 block relative">
+                        <div 
+                          className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#F27D26] to-transparent skeleton-shimmer pointer-events-none z-10 opacity-80" 
+                          aria-hidden="true"
+                        />
+                      </td>
+                    )}
+
+                    {/* Column: PO Number & Date */}
+                    <td className="py-4 px-4 align-middle">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-extrabold text-slate-900 dark:text-zinc-100 group-hover:text-[#F27D26] transition-colors">
+                            {order.orderNumber}
+                          </span>
+                          {/* Live Refetch Pulse Badge */}
+                          {isRefetching && (
+                            <span 
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-[#F27D26] bg-[#F27D26]/10 px-2 py-0.5 rounded-full border border-[#F27D26]/20 animate-pulse shrink-0"
+                              title="Background update in progress"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#F27D26] animate-ping" />
+                              Syncing
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-500 dark:text-zinc-500">
+                          {new Date(order.createdAt).toLocaleDateString(undefined, { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            year: 'numeric' 
+                          })}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Column: Order Status */}
+                    <td className="py-4 px-4 align-middle whitespace-nowrap">
+                      {getStatusBadge(order.status)}
+                    </td>
+
+                    {/* Column: Payment Status */}
+                    <td className="py-4 px-4 align-middle whitespace-nowrap">
+                      {getPaymentStatusBadge(order)}
+                    </td>
+
+                    {/* Column: Items Summary */}
+                    <td className="py-4 px-4 align-middle max-w-xs">
+                      <div className="space-y-1">
+                        <div className="text-xs text-slate-700 dark:text-zinc-300 font-medium truncate">
+                          {order.items[0]?.quantity}x {order.items[0]?.name}
+                        </div>
+                        {order.items.length > 1 && (
+                          <div className="text-[11px] text-slate-500 dark:text-zinc-500 font-semibold">
+                            +{order.items.length - 1} more item{order.items.length > 2 ? 's' : ''} ({order.items.reduce((s, i) => s + i.quantity, 0)} total units)
+                          </div>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Column: Carrier & Tracking */}
+                    <td className="py-4 px-4 align-middle whitespace-nowrap">
+                      {order.trackingNumber ? (
+                        <div className="flex items-center gap-1.5 text-xs text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 px-2.5 py-1 rounded-lg max-w-fit">
+                          <Truck className="w-3.5 h-3.5 text-[#F27D26] shrink-0" />
+                          <span className="font-mono text-[11px] font-bold">{order.trackingNumber}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 dark:text-zinc-600 italic">
+                          Pending Dispatch
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Column: Total Amount */}
+                    <td className="py-4 px-4 align-middle text-right whitespace-nowrap">
+                      <span className="text-sm font-extrabold text-[#F27D26] font-mono">
+                        {formatPrice(order.total)}
+                      </span>
+                    </td>
+
+                    {/* Column: Actions & Quick Reorder */}
+                    <td className="py-4 px-4 align-middle text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-2">
+                        {/* Primary Quick Reorder Button */}
+                        <button
+                          id={`quick-reorder-${order.orderNumber}`}
+                          type="button"
+                          disabled={reorderingOrderId === order.id}
+                          onClick={() => handleReorder(order)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-xs btn-hover ${
+                            reorderingOrderId === order.id
+                              ? 'bg-emerald-500 text-white border border-emerald-600 shadow-emerald-500/20'
+                              : 'bg-[#F27D26]/10 hover:bg-[#F27D26] text-[#F27D26] hover:text-black border border-[#F27D26]/30 hover:border-[#F27D26]'
+                          }`}
+                          title={`Quick reorder all ${order.items.length} item(s) (${order.items.reduce((s, i) => s + i.quantity, 0)} units) from PO #${order.orderNumber}`}
+                        >
+                          {reorderingOrderId === order.id ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                              <span>Added!</span>
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                              <span>Quick Reorder</span>
+                            </>
+                          )}
+                        </button>
+
+                        {order.status !== 'cancelled' && order.paymentStatus !== 'paid' && (
+                          <button
+                            id={`retry-payment-${order.orderNumber}`}
+                            type="button"
+                            disabled={retryingOrderId === order.id}
+                            onClick={() => handleRetryPayment(order)}
+                            className="p-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 transition-all btn-hover cursor-pointer disabled:opacity-50"
+                            title="Retry Flutterwave payment"
+                          >
+                            {retryingOrderId === order.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+                            ) : (
+                              <CreditCard className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+
+                        <button
+                          id={`view-invoice-${order.orderNumber}`}
+                          type="button"
+                          onClick={() => setSelectedOrder(order)}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-zinc-300 text-xs font-bold transition-all btn-hover cursor-pointer flex items-center gap-1"
+                          title="View Invoice & Consignment Details"
+                        >
+                          <span>Invoice</span>
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
+        /* =========================================================================
+           CARD VIEW: Detailed Cards with Refetch Loading Pulse Indicators
+           ========================================================================= */
         <div className="space-y-3">
           {processedOrders.map(order => (
             <div
               key={order.id}
               onClick={() => setSelectedOrder(order)}
-              className="bg-white dark:bg-[#161616] rounded-2xl border border-slate-200 dark:border-white/5 p-5 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-slate-300 dark:hover:border-white/20 flex flex-col md:flex-row md:items-center justify-between gap-4 btn-hover"
+              className={`relative overflow-hidden bg-white dark:bg-[#161616] rounded-2xl border p-5 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 btn-hover group ${
+                isRefetching
+                  ? 'border-[#F27D26]/30 shadow-xs table-row-refetch-pulse animate-pulse-subtle'
+                  : 'border-slate-200 dark:border-white/5 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-white/20'
+              }`}
             >
+              {/* Top Shimmer Loading Pulse Bar during Refetch */}
+              {isRefetching && (
+                <div 
+                  className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#F27D26] to-transparent skeleton-shimmer pointer-events-none z-10 opacity-80" 
+                  aria-hidden="true"
+                />
+              )}
+
               <div className="space-y-2 flex-1">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="font-mono text-sm font-extrabold text-slate-900 dark:text-zinc-100">
+                  <span className="font-mono text-sm font-extrabold text-slate-900 dark:text-zinc-100 group-hover:text-[#F27D26] transition-colors">
                     {order.orderNumber}
                   </span>
                   {getStatusBadge(order.status)}
                   {getPaymentStatusBadge(order)}
+                  {isRefetching && (
+                    <span 
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-[#F27D26] bg-[#F27D26]/10 px-2 py-0.5 rounded-full border border-[#F27D26]/20 animate-pulse shrink-0"
+                      title="Background update in progress"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#F27D26] animate-ping" />
+                      Syncing
+                    </span>
+                  )}
                   <span className="text-[11px] text-slate-500 dark:text-zinc-500">
                     Placed on {new Date(order.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </span>
@@ -513,15 +845,30 @@ export const CustomerDashboard: React.FC = () => {
 
               <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5 sm:gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-slate-200 dark:border-white/5 shrink-0">
                 <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  {/* Reorder Button */}
+                  {/* Quick Reorder Button */}
                   <button
+                    id={`card-quick-reorder-${order.orderNumber}`}
                     type="button"
+                    disabled={reorderingOrderId === order.id}
                     onClick={() => handleReorder(order)}
-                    className="px-3 py-1.5 rounded-xl border border-[#F27D26]/40 bg-[#F27D26]/10 hover:bg-[#F27D26]/20 text-[#F27D26] text-xs font-extrabold transition-all flex items-center gap-1.5 btn-hover cursor-pointer shadow-sm"
-                    title={`Add all ${order.items.length} item(s) from Order #${order.orderNumber} back into cart`}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 btn-hover cursor-pointer shadow-xs ${
+                      reorderingOrderId === order.id
+                        ? 'bg-emerald-500 text-white border border-emerald-600 shadow-emerald-500/20'
+                        : 'border border-[#F27D26]/40 bg-[#F27D26]/10 hover:bg-[#F27D26] text-[#F27D26] hover:text-black'
+                    }`}
+                    title={`Quick reorder all ${order.items.length} item(s) from Order #${order.orderNumber} back into cart`}
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Reorder</span>
+                    {reorderingOrderId === order.id ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                        <span>Added to Cart!</span>
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Quick Reorder ({order.items.length})</span>
+                      </>
+                    )}
                   </button>
 
                   {order.status !== 'cancelled' && order.paymentStatus !== 'paid' && (
@@ -755,13 +1102,28 @@ export const CustomerDashboard: React.FC = () => {
                           <td className="p-3 text-right font-extrabold text-[#F27D26]">{formatPrice(item.subtotal)}</td>
                           <td className="p-3 text-center">
                             <button
+                              id={`modal-reorder-item-${item.productId || idx}`}
                               type="button"
+                              disabled={reorderingItemId === (item.productId || item.name)}
                               onClick={() => handleReorderSingleItem(item)}
-                              className="px-2 py-1 rounded-lg border border-[#F27D26]/40 bg-[#F27D26]/10 hover:bg-[#F27D26]/20 text-[#F27D26] text-[11px] font-bold transition-all inline-flex items-center gap-1 btn-hover cursor-pointer"
+                              className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition-all inline-flex items-center gap-1 btn-hover cursor-pointer ${
+                                reorderingItemId === (item.productId || item.name)
+                                  ? 'border-emerald-500 bg-emerald-500 text-white'
+                                  : 'border-[#F27D26]/40 bg-[#F27D26]/10 hover:bg-[#F27D26]/20 text-[#F27D26]'
+                              }`}
                               title={`Add ${item.quantity}x ${item.name} to cart`}
                             >
-                              <ShoppingBag className="w-3 h-3" />
-                              <span className="hidden sm:inline">Add</span>
+                              {reorderingItemId === (item.productId || item.name) ? (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3 text-white" />
+                                  <span>Added!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ShoppingBag className="w-3 h-3" />
+                                  <span>Add</span>
+                                </>
+                              )}
                             </button>
                           </td>
                         </tr>
@@ -774,15 +1136,30 @@ export const CustomerDashboard: React.FC = () => {
               {/* Totals Summary & Invoice Actions */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-slate-200 dark:border-white/5">
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Reorder Entire Order Button */}
+                  {/* Quick Reorder Entire Order Button */}
                   <button
+                    id={`modal-quick-reorder-${selectedOrder.orderNumber}`}
                     type="button"
+                    disabled={reorderingOrderId === selectedOrder.id}
                     onClick={() => handleReorder(selectedOrder)}
-                    className="px-4 py-2.5 rounded-xl border border-[#F27D26]/50 bg-[#F27D26] hover:bg-[#e06d1a] text-black text-xs font-black transition-all flex items-center gap-2 btn-hover cursor-pointer shadow-lg shadow-[#F27D26]/25"
-                    title="Add all items from this order into your cart"
+                    className={`px-4 py-2.5 rounded-xl border text-xs font-black transition-all flex items-center gap-2 btn-hover cursor-pointer shadow-lg ${
+                      reorderingOrderId === selectedOrder.id
+                        ? 'border-emerald-600 bg-emerald-500 text-white shadow-emerald-500/25'
+                        : 'border-[#F27D26]/50 bg-[#F27D26] hover:bg-[#e06d1a] text-black shadow-[#F27D26]/25'
+                    }`}
+                    title="Add all items from this order into your cart in one click"
                   >
-                    <RotateCcw className="w-4 h-4 text-black stroke-[2.5]" />
-                    <span>Reorder All Items</span>
+                    {reorderingOrderId === selectedOrder.id ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-white" />
+                        <span>Added All Items to Cart!</span>
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-4 h-4 text-black stroke-[2.5]" />
+                        <span>Quick Reorder All Items</span>
+                      </>
+                    )}
                   </button>
 
                   {selectedOrder.status !== 'cancelled' && selectedOrder.paymentStatus !== 'paid' && (

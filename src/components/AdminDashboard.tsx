@@ -423,7 +423,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         setActiveMessageCustomerId(customerThreads[0].customerId);
       }
     }
-  }, [customerThreads, activeMessageCustomerId]);
+  }, [customerThreads.length, activeMessageCustomerId]);
 
   const handleSelectMessageCustomer = useCallback((cId: string | null) => {
     setActiveMessageCustomerId(cId);

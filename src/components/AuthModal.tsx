@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, 
@@ -64,6 +64,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const { showToast } = useToast();
   const { isDark } = useTheme();
 
+  const onLoginSuccessRef = useRef(onLoginSuccess);
+  onLoginSuccessRef.current = onLoginSuccess;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   // Sync initialMode prop when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -78,10 +83,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (isOpen && currentUser) {
       setIsGoogleLoading(false);
       setIsLoading(false);
-      onLoginSuccess?.(userProfile?.role || 'customer');
-      onClose();
+      onLoginSuccessRef.current?.(userProfile?.role || 'customer');
+      onCloseRef.current();
     }
-  }, [isOpen, currentUser, userProfile?.role, onClose, onLoginSuccess]);
+  }, [isOpen, currentUser?.uid, userProfile?.role]);
 
   // Lock body scroll when auth modal is open
   useEffect(() => {

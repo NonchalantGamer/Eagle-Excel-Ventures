@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { isSupabaseEnabled, getSupabase } from '../lib/supabase';
 import { getUserProfile, saveUserProfile, subscribeToUserProfile, getAssignedRole } from '../services/userService';
@@ -387,7 +387,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
 
-  const loginWithEmail = async (email: string, pass: string): Promise<UserProfile> => {
+  const loginWithEmail = useCallback(async (email: string, pass: string): Promise<UserProfile> => {
     const trimmedEmail = (email || '').trim();
     if (!isSupabaseEnabled()) {
       throw new Error('Supabase authentication is not configured. Please enter your Supabase URL and Anon Key in Database Settings.');
@@ -400,9 +400,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const appUser = toAppUser(authResult.user)!;
     const profile = await ensureProfileDocument(appUser);
     return profile;
-  };
+  }, []);
 
-  const signupWithEmail = async (
+  const signupWithEmail = useCallback(async (
     email: string, 
     pass: string, 
     name: string, 
@@ -440,23 +440,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setCurrentUser(toAppUser(authResult.user));
     }
     return newProfile;
-  };
+  }, []);
 
-  const loginWithGoogle = async (options?: { redirectTo?: string }): Promise<void> => {
+  const loginWithGoogle = useCallback(async (options?: { redirectTo?: string }): Promise<void> => {
     if (!isSupabaseEnabled()) {
       throw new Error('Supabase authentication is not configured. Please enter your Supabase URL and Anon Key in Database Settings.');
     }
     await loginWithGoogleOAuth(options);
-  };
+  }, []);
 
-  const sendPasswordResetEmail = async (email: string): Promise<void> => {
+  const sendPasswordResetEmail = useCallback(async (email: string): Promise<void> => {
     if (!isSupabaseEnabled()) {
       throw new Error('Supabase authentication is not configured. Please enter your Supabase URL and Anon Key in Database Settings.');
     }
     await sendPasswordReset((email || '').trim());
-  };
+  }, []);
 
-  const logout = async (): Promise<void> => {
+  const logout = useCallback(async (): Promise<void> => {
     await logoutUser();
     localStorage.removeItem('ee_last_active_user_id');
     localStorage.removeItem('ee_cached_notifications');
@@ -466,15 +466,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     setCurrentUser(null);
     setUserProfile(null);
-  };
+  }, []);
 
-  const refreshProfile = async (): Promise<void> => {
+  const refreshProfile = useCallback(async (): Promise<void> => {
     if (currentUser) {
       await ensureProfileDocument(currentUser);
     }
-  };
+  }, [currentUser]);
 
-  const updateProfileData = async (updates: Partial<UserProfile>): Promise<void> => {
+  const updateProfileData = useCallback(async (updates: Partial<UserProfile>): Promise<void> => {
     if (!currentUser) return;
     const existing = userProfile || {
       id: currentUser.uid,
@@ -510,37 +510,52 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     // Save to Supabase & local storage
     await saveUserProfile(updated);
-  };
+  }, [currentUser, userProfile]);
 
   const effectiveRole: UserRole = userProfile?.role || 'customer';
   const isAdmin = effectiveRole === 'admin';
 
-  const syncPostAuthProfile = async (user?: AppUser | null): Promise<UserProfile | null> => {
+  const syncPostAuthProfile = useCallback(async (user?: AppUser | null): Promise<UserProfile | null> => {
     const targetUser = user || currentUser;
     if (!targetUser) return null;
     return await ensureProfileDocument(targetUser);
-  };
+  }, [currentUser]);
+
+  const contextValue = React.useMemo(() => ({
+    currentUser,
+    userProfile,
+    role: effectiveRole,
+    isAdmin,
+    loading,
+    isHydrated,
+    loginWithEmail,
+    signupWithEmail,
+    loginWithGoogle,
+    sendPasswordResetEmail,
+    logout,
+    refreshProfile,
+    syncPostAuthProfile,
+    updateProfileData,
+    setSimulatedRole: () => {}
+  }), [
+    currentUser,
+    userProfile,
+    effectiveRole,
+    isAdmin,
+    loading,
+    isHydrated,
+    loginWithEmail,
+    signupWithEmail,
+    loginWithGoogle,
+    sendPasswordResetEmail,
+    logout,
+    refreshProfile,
+    syncPostAuthProfile,
+    updateProfileData
+  ]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        currentUser,
-        userProfile,
-        role: effectiveRole,
-        isAdmin,
-        loading,
-        isHydrated,
-        loginWithEmail,
-        signupWithEmail,
-        loginWithGoogle,
-        sendPasswordResetEmail,
-        logout,
-        refreshProfile,
-        syncPostAuthProfile,
-        updateProfileData,
-        setSimulatedRole: () => {}
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

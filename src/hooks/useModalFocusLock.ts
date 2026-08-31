@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 // Global counter for active modals/drawers/popups
 let activeModalCount = 0;
@@ -12,6 +12,9 @@ let activeModalCount = 0;
  * 4. Listens for Escape key to close
  */
 export function useModalFocusLock(isOpen: boolean, onClose?: () => void) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -30,8 +33,8 @@ export function useModalFocusLock(isOpen: boolean, onClose?: () => void) {
     if (footer) footer.classList.add('menu-backdrop-blurred');
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onClose) {
-        onClose();
+      if (e.key === 'Escape' && onCloseRef.current) {
+        onCloseRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -47,5 +50,6 @@ export function useModalFocusLock(isOpen: boolean, onClose?: () => void) {
         if (footer) footer.classList.remove('menu-backdrop-blurred');
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 }
+

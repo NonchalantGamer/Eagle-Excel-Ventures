@@ -57,6 +57,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [liveRating, setLiveRating] = useState<number>(() => product?.rating || 5.0);
   const [liveReviewsCount, setLiveReviewsCount] = useState<number>(() => product?.reviewsCount || 0);
 
+  const handleUpdateRating = React.useCallback((newRating: number, count: number) => {
+    setLiveRating(prev => prev !== newRating ? newRating : prev);
+    setLiveReviewsCount(prev => prev !== count ? count : prev);
+  }, []);
+
   useModalFocusLock(!!product, onClose);
 
   useEffect(() => {
@@ -68,7 +73,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       setLiveRating(summary.averageRating);
       setLiveReviewsCount(summary.totalReviews);
     }
-  }, [product]);
+  }, [product?.id, product?.rating, product?.reviewsCount, product?.minOrderQty]);
 
   if (!product) return null;
 
@@ -465,10 +470,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             product={product}
             userOrders={orders}
             onOpenAuth={onOpenAuth}
-            onUpdateProductRating={(newRating, count) => {
-              setLiveRating(newRating);
-              setLiveReviewsCount(count);
-            }}
+            onUpdateProductRating={handleUpdateRating}
           />
 
         </div>

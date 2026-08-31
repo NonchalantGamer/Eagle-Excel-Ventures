@@ -290,7 +290,7 @@ export const CustomerSupportModal: React.FC<CustomerSupportModalProps> = ({
     } else if (initialCustomMessage && isOpen) {
       setInputText(initialCustomMessage);
     }
-  }, [initialProductInquiry, initialCustomMessage, isOpen]);
+  }, [initialProductInquiry?.id, initialCustomMessage, isOpen]);
 
   // Auto scroll to latest conversation exchange on open or message updates
   useEffect(() => {

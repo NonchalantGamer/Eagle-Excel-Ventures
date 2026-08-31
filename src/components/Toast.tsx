@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { CheckCircle2, AlertCircle, Info, X, ArrowRight } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -29,9 +29,13 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const recentToastsRef = React.useRef<Map<string, number>>(new Map());
+  const recentToastsRef = useRef<Map<string, number>>(new Map());
 
-  const showToast = (message: string, typeOrOptions?: ToastType | ToastOptions) => {
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const showToast = useCallback((message: string, typeOrOptions?: ToastType | ToastOptions) => {
     // Anti-spam deduplication: Don't show identical toast within 2.5s
     const now = Date.now();
     const lastTime = recentToastsRef.current.get(message);
@@ -57,14 +61,12 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, duration);
-  };
+  }, []);
 
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  const contextValue = useMemo(() => ({ showToast }), [showToast]);
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <div className="fixed bottom-5 right-5 z-[99999] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-3 sm:px-0">
         {toasts.map(toast => (

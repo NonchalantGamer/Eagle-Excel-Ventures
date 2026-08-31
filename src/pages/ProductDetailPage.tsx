@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   ArrowLeft, 
   ShoppingCart, 
@@ -75,6 +75,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [isZoomed, setIsZoomed] = useState(false);
   const [liveRating, setLiveRating] = useState<number>(() => product?.rating || 5.0);
   const [liveReviewsCount, setLiveReviewsCount] = useState<number>(() => product?.reviewsCount || 0);
+
+  const handleUpdateRating = useCallback((newRating: number, count: number) => {
+    setLiveRating(prev => prev !== newRating ? newRating : prev);
+    setLiveReviewsCount(prev => prev !== count ? count : prev);
+  }, []);
 
   const reviewsSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -856,10 +861,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 product={product}
                 userOrders={orders}
                 onOpenAuth={onOpenAuth}
-                onUpdateProductRating={(newRating, count) => {
-                  setLiveRating(newRating);
-                  setLiveReviewsCount(count);
-                }}
+                onUpdateProductRating={handleUpdateRating}
               />
             </div>
           )}

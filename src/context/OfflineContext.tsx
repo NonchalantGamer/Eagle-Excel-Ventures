@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { 
   getQueuedOfflineActions, 
   queueOfflineAction, 
@@ -28,9 +28,9 @@ export const OfflineProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isBannerVisible, setIsBannerVisible] = useState<boolean>(false);
   const [lastOnlineChange, setLastOnlineChange] = useState<number>(Date.now());
 
-  const refreshQueue = () => {
+  const refreshQueue = useCallback(() => {
     setPendingActions(getQueuedOfflineActions());
-  };
+  }, []);
 
   useEffect(() => {
     const handleOnline = async () => {
@@ -73,9 +73,9 @@ export const OfflineProvider: React.FC<{ children: ReactNode }> = ({ children })
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [refreshQueue]);
 
-  const syncNow = async () => {
+  const syncNow = useCallback(async () => {
     if (!isOnline) return;
     setIsSyncing(true);
     try {
@@ -84,32 +84,40 @@ export const OfflineProvider: React.FC<{ children: ReactNode }> = ({ children })
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [isOnline, refreshQueue]);
 
-  const queueAction = (type: OfflinePendingAction['type'], payload: any) => {
+  const queueAction = useCallback((type: OfflinePendingAction['type'], payload: any) => {
     const action = queueOfflineAction(type, payload);
     refreshQueue();
     return action;
-  };
+  }, [refreshQueue]);
 
-  const dismissBanner = () => {
+  const dismissBanner = useCallback(() => {
     setIsBannerVisible(false);
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    isOnline,
+    isOffline: !isOnline,
+    pendingActions,
+    pendingCount: pendingActions.length,
+    isSyncing,
+    syncNow,
+    queueAction,
+    dismissBanner,
+    isBannerVisible
+  }), [
+    isOnline,
+    pendingActions,
+    isSyncing,
+    syncNow,
+    queueAction,
+    dismissBanner,
+    isBannerVisible
+  ]);
 
   return (
-    <OfflineContext.Provider
-      value={{
-        isOnline,
-        isOffline: !isOnline,
-        pendingActions,
-        pendingCount: pendingActions.length,
-        isSyncing,
-        syncNow,
-        queueAction,
-        dismissBanner,
-        isBannerVisible
-      }}
-    >
+    <OfflineContext.Provider value={contextValue}>
       {children}
     </OfflineContext.Provider>
   );

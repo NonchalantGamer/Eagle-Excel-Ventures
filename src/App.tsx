@@ -71,7 +71,10 @@ function getInitialView(): PageView {
         .split('/')[0]
         .trim()
         .toLowerCase();
-      if (cleanHash && (VALID_VIEWS as string[]).includes(cleanHash)) {
+      if (!cleanHash || cleanHash === 'home') {
+        return 'home';
+      }
+      if ((VALID_VIEWS as string[]).includes(cleanHash)) {
         return cleanHash as PageView;
       }
     }
@@ -86,7 +89,7 @@ function getInitialView(): PageView {
     }
 
     // 3. Check window.location.pathname (e.g. /support, /catalog, /orders, /rfq)
-    if (window.location.pathname) {
+    if (window.location.pathname && window.location.pathname !== '/' && window.location.pathname !== '/index.html') {
       const pathname = window.location.pathname
         .replace(/^\/+/, '')
         .replace(/\/+$/, '')
@@ -192,15 +195,15 @@ const MainApp: React.FC = () => {
   // Scroll reveal trigger
   useScrollReveal([currentView, products.length, searchQuery]);
 
-  // Synchronize URL hash, browser history, and localStorage when navigating or refreshing
+  // Listen to browser navigation (hashchange, popstate)
   useEffect(() => {
     const onLocationChange = () => {
       const parsed = getInitialView();
       if (parsed) {
         if ((parsed === 'admin' || parsed === 'manage-products') && !isAdmin && isHydrated && !authLoading) {
-          setCurrentView('home');
-        } else if (parsed !== currentView) {
-          setCurrentView(parsed);
+          setCurrentView(prev => prev !== 'home' ? 'home' : prev);
+        } else {
+          setCurrentView(prev => prev !== parsed ? parsed : prev);
         }
       }
     };
@@ -208,6 +211,14 @@ const MainApp: React.FC = () => {
     window.addEventListener('hashchange', onLocationChange);
     window.addEventListener('popstate', onLocationChange);
 
+    return () => {
+      window.removeEventListener('hashchange', onLocationChange);
+      window.removeEventListener('popstate', onLocationChange);
+    };
+  }, [isAdmin, isHydrated, authLoading]);
+
+  // Synchronize state changes to URL hash and storage
+  useEffect(() => {
     // If current view is an admin view and user is not admin, redirect to home
     if (isHydrated && !authLoading && !isAdmin && (currentView === 'admin' || currentView === 'manage-products')) {
       setCurrentView('home');
@@ -249,12 +260,7 @@ const MainApp: React.FC = () => {
         window.location.hash = targetHash;
       }
     }
-
-    return () => {
-      window.removeEventListener('hashchange', onLocationChange);
-      window.removeEventListener('popstate', onLocationChange);
-    };
-  }, [currentView, isAdmin, isHydrated, authLoading]);
+  }, [currentView, selectedProduct?.id, isAdmin, isHydrated, authLoading]);
 
   // Listen for OAuth completion and cross-window view navigation signals (e.g. redirect back to homescreen #/)
   useEffect(() => {
@@ -402,25 +408,23 @@ const MainApp: React.FC = () => {
         const prodParam = searchParams.get('product') || searchParams.get('productId') || searchParams.get('id');
         const storedProdId = sessionStorage.getItem('ee_active_product_id');
 
-        if (!selectedProduct || (prodParam && selectedProduct.id !== prodParam)) {
-          if (skuParam || prodParam || (currentView === 'product' && storedProdId)) {
-            const matched = products.find(p => 
-              (skuParam && p.sku?.toLowerCase() === skuParam.toLowerCase()) ||
-              (prodParam && p.id === prodParam) ||
-              (!prodParam && !skuParam && storedProdId && p.id === storedProdId)
-            );
-            if (matched) {
-              setSelectedProduct(matched);
-            } else if (currentView === 'product' && products[0]) {
-              setSelectedProduct(products[0]);
-            }
+        if (skuParam || prodParam || (currentView === 'product' && storedProdId)) {
+          const matched = products.find(p => 
+            (skuParam && p.sku?.toLowerCase() === skuParam.toLowerCase()) ||
+            (prodParam && p.id === prodParam) ||
+            (!prodParam && !skuParam && storedProdId && p.id === storedProdId)
+          );
+          if (matched) {
+            setSelectedProduct(prev => prev?.id !== matched.id ? matched : prev);
+          } else if (currentView === 'product' && products[0]) {
+            setSelectedProduct(prev => prev?.id !== products[0].id ? products[0] : prev);
           }
         }
       }
     } catch (e) {
       // ignore
     }
-  }, [products, selectedProduct, currentView]);
+  }, [products, currentView]);
 
   // Load and subscribe to products in database in real-time
   useEffect(() => {

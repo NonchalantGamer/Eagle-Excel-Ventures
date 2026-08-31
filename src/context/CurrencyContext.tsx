@@ -57,26 +57,27 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
     return 'NGN'; // Default to NGN for West African B2B market
   });
 
-  const setCurrency = (c: CurrencyCode) => {
+  const setCurrency = React.useCallback((c: CurrencyCode) => {
     setCurrencyState(c);
     try {
       localStorage.setItem('ee_preferred_currency', c);
     } catch (e) {
       // ignore
     }
-  };
+  }, []);
 
   const currentCurrencyConfig = CURRENCIES[currency];
 
-  const convertPrice = (amountInUSD: number): number => {
-    return amountInUSD * currentCurrencyConfig.rateFromUSD;
-  };
+  const convertPrice = React.useCallback((amountInUSD: number): number => {
+    return amountInUSD * CURRENCIES[currency].rateFromUSD;
+  }, [currency]);
 
-  const formatPrice = (
+  const formatPrice = React.useCallback((
     amountInUSD: number, 
     options?: { showCode?: boolean; round?: boolean }
   ): string => {
-    const converted = convertPrice(amountInUSD);
+    const config = CURRENCIES[currency];
+    const converted = amountInUSD * config.rateFromUSD;
     const { showCode = false, round = currency !== 'USD' } = options || {};
 
     let formattedNumber: string;
@@ -93,19 +94,19 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
       return `${formattedNumber} FCFA${showCode ? ' (XAF)' : ''}`;
     }
 
-    return `${currentCurrencyConfig.symbol}${formattedNumber}${showCode ? ` ${currency}` : ''}`;
-  };
+    return `${config.symbol}${formattedNumber}${showCode ? ` ${currency}` : ''}`;
+  }, [currency]);
+
+  const value = React.useMemo(() => ({
+    currency,
+    setCurrency,
+    formatPrice,
+    convertPrice,
+    currentCurrencyConfig
+  }), [currency, setCurrency, formatPrice, convertPrice, currentCurrencyConfig]);
 
   return (
-    <CurrencyContext.Provider
-      value={{
-        currency,
-        setCurrency,
-        formatPrice,
-        convertPrice,
-        currentCurrencyConfig
-      }}
-    >
+    <CurrencyContext.Provider value={value}>
       {children}
     </CurrencyContext.Provider>
   );

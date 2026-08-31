@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { 
   AppNotification, 
   UserRole, 
@@ -208,27 +208,30 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => {
       unsubscribe();
     };
-  }, [currentUser, isAdmin, role, soundEnabled, browserNotificationsEnabled, browserPermission]);
+  }, [currentUser?.uid, isAdmin, role, soundEnabled, browserNotificationsEnabled, browserPermission]);
 
-  const importantNotifications = currentUser ? notifications.filter(isImportantNotification) : [];
+  const importantNotifications = useMemo(() => {
+    return currentUser ? notifications.filter(isImportantNotification) : [];
+  }, [currentUser, notifications]);
 
   // Unread count is strictly 0 if user is signed out
-  const unreadCount = !currentUser
-    ? 0
-    : (importantOnly ? importantNotifications : notifications).filter(n => !n.read).length;
+  const unreadCount = useMemo(() => {
+    if (!currentUser) return 0;
+    return (importantOnly ? importantNotifications : notifications).filter(n => !n.read).length;
+  }, [currentUser, importantOnly, importantNotifications, notifications]);
 
-  const markAsRead = async (id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     await markNotificationAsRead(id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
+  }, []);
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     const activeRole: UserRole = isAdmin ? 'admin' : 'customer';
     await markAllNotificationsAsRead(activeRole, currentUser?.uid);
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
+  }, [isAdmin, currentUser?.uid]);
 
-  const markThreadNotificationsAsRead = async (customerId: string) => {
+  const markThreadNotificationsAsRead = useCallback(async (customerId: string) => {
     if (!customerId) return;
     const activeRole: UserRole = isAdmin ? 'admin' : 'customer';
     await markMessageNotificationsAsRead(customerId, activeRole);
@@ -239,20 +242,20 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
       return n;
     }));
-  };
+  }, [isAdmin]);
 
-  const deleteNotification = async (id: string) => {
+  const deleteNotification = useCallback(async (id: string) => {
     await deleteNotificationById(id);
     setNotifications(prev => prev.filter(n => n.id !== id));
-  };
+  }, []);
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     clearAllLocalNotifications();
     setNotifications([]);
-  };
+  }, []);
 
   // Helper trigger: Alert customer when order status changes (Shipped, Delivered, Processing, Customs)
-  const notifyCustomerOrderStatus = async (
+  const notifyCustomerOrderStatus = useCallback(async (
     orderNumber: string, 
     status: OrderStatus, 
     trackingNumber?: string,
@@ -290,10 +293,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         playNotificationSound();
       }
     }
-  };
+  }, [currentUser?.uid, browserNotificationsEnabled, browserPermission, isAdmin, soundEnabled]);
 
   // Helper trigger: Alert admin on new wholesale purchase orders
-  const notifyAdminNewOrder = async (
+  const notifyAdminNewOrder = useCallback(async (
     orderNumber: string, 
     customerName: string, 
     total: number,
@@ -341,10 +344,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         });
       }
     }
-  };
+  }, [currentUser?.uid, isAdmin, soundEnabled, browserNotificationsEnabled, browserPermission]);
 
   // Helper trigger: Alert admin on new RFQ submissions
-  const notifyAdminNewRFQ = async (
+  const notifyAdminNewRFQ = useCallback(async (
     refNumber: string, 
     companyName: string, 
     category: string, 
@@ -364,10 +367,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     if (soundEnabled && isImportantNotification(relevant)) {
       playNotificationSound();
     }
-  };
+  }, [currentUser?.uid, isAdmin, soundEnabled]);
 
   // Helper trigger: Alert admin on customer message
-  const notifyAdminNewMessage = async (
+  const notifyAdminNewMessage = useCallback(async (
     senderName: string, 
     messagePreview: string
   ) => {
@@ -389,10 +392,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         playNotificationSound();
       }
     }
-  };
+  }, [isAdmin, soundEnabled]);
 
   // Helper trigger: Alert customer on support desk response
-  const notifySupportResponse = async (
+  const notifySupportResponse = useCallback(async (
     senderName: string,
     messagePreview: string
   ) => {
@@ -410,16 +413,16 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         playNotificationSound();
       }
     }
-  };
+  }, [currentUser?.uid, isAdmin, soundEnabled]);
 
   // Helper trigger: Profile update notification (kept silent to avoid spam)
-  const notifyProfileUpdated = async () => {
+  const notifyProfileUpdated = useCallback(async () => {
     // Suppressed from polluting user notification logs
     return Promise.resolve();
-  };
+  }, []);
 
   // Helper trigger: Dispatch broadcast campaign to wholesale customers
-  const sendBroadcastToCustomers = async (
+  const sendBroadcastToCustomers = useCallback(async (
     campaignData: Omit<BroadcastCampaign, 'id' | 'sentAt' | 'active'>
   ): Promise<BroadcastCampaign> => {
     const campaign = await sendBroadcastCampaign(campaignData);
@@ -427,37 +430,62 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       playNotificationSound();
     }
     return campaign;
-  };
+  }, [soundEnabled]);
+
+  const contextValue = useMemo(() => ({
+    notifications,
+    importantNotifications,
+    unreadCount,
+    soundEnabled,
+    setSoundEnabled,
+    importantOnly,
+    setImportantOnly,
+    browserPermission,
+    browserNotificationsEnabled,
+    setBrowserNotificationsEnabled,
+    requestBrowserPermission,
+    pushNativeNotification,
+    markAsRead,
+    markAllAsRead,
+    markThreadNotificationsAsRead,
+    deleteNotification,
+    clearAll,
+    notifyCustomerOrderStatus,
+    notifyAdminNewOrder,
+    notifyAdminNewRFQ,
+    notifyAdminNewMessage,
+    notifySupportResponse,
+    notifyProfileUpdated,
+    sendBroadcastToCustomers
+  }), [
+    notifications,
+    importantNotifications,
+    unreadCount,
+    soundEnabled,
+    setSoundEnabled,
+    importantOnly,
+    setImportantOnly,
+    browserPermission,
+    browserNotificationsEnabled,
+    setBrowserNotificationsEnabled,
+    requestBrowserPermission,
+    pushNativeNotification,
+    markAsRead,
+    markAllAsRead,
+    markThreadNotificationsAsRead,
+    deleteNotification,
+    clearAll,
+    notifyCustomerOrderStatus,
+    notifyAdminNewOrder,
+    notifyAdminNewRFQ,
+    notifyAdminNewMessage,
+    notifySupportResponse,
+    notifyProfileUpdated,
+    sendBroadcastToCustomers
+  ]);
 
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        importantNotifications,
-        unreadCount,
-        soundEnabled,
-        setSoundEnabled,
-        importantOnly,
-        setImportantOnly,
-        browserPermission,
-        browserNotificationsEnabled,
-        setBrowserNotificationsEnabled,
-        requestBrowserPermission,
-        pushNativeNotification,
-        markAsRead,
-        markAllAsRead,
-        markThreadNotificationsAsRead,
-        deleteNotification,
-        clearAll,
-        notifyCustomerOrderStatus,
-        notifyAdminNewOrder,
-        notifyAdminNewRFQ,
-        notifyAdminNewMessage,
-        notifySupportResponse,
-        notifyProfileUpdated,
-        sendBroadcastToCustomers
-      }}
-    >
+    <NotificationContext.Provider value={contextValue}>
       {children}
     </NotificationContext.Provider>
   );

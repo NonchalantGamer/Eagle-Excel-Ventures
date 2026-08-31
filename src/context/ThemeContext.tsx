@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { getBrandLogo } from '../constants/branding';
 
 type ThemeMode = 'light' | 'dark' | 'system';
@@ -87,25 +87,35 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [isDark]);
 
-  const setTheme = (newTheme: ThemeMode) => {
+  const setTheme = useCallback((newTheme: ThemeMode) => {
     setThemeState(newTheme);
     try {
       localStorage.setItem('eev_theme', newTheme);
     } catch (e) {
       console.warn('Could not persist theme setting:', e);
     }
-  };
+  }, []);
 
-  const toggleTheme = () => {
-    if (isDark) {
-      setTheme('light');
-    } else {
-      setTheme('dark');
-    }
-  };
+  const toggleTheme = useCallback(() => {
+    setThemeState(prev => {
+      const currentlyDark = prev === 'system' ? systemIsDark : prev === 'dark';
+      const nextTheme = currentlyDark ? 'light' : 'dark';
+      try {
+        localStorage.setItem('eev_theme', nextTheme);
+      } catch (e) {}
+      return nextTheme;
+    });
+  }, [systemIsDark]);
+
+  const contextValue = useMemo(() => ({
+    theme,
+    isDark,
+    setTheme,
+    toggleTheme
+  }), [theme, isDark, setTheme, toggleTheme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, isDark, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   );

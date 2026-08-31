@@ -115,7 +115,7 @@ export const CustomerProfileDashboard: React.FC<CustomerProfileDashboardProps> =
       setDisplayName(currentUser.displayName || 'Wholesale Buyer');
       setPhotoURL(currentUser.photoURL || 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&auto=format&fit=crop&q=80');
     }
-  }, [userProfile, currentUser]);
+  }, [userProfile?.id, userProfile?.updatedAt, currentUser?.uid]);
 
   const handleSaveProfile = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

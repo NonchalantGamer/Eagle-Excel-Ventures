@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { Product, CartItem } from '../types';
 
 interface CartContextType {
@@ -58,7 +58,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [items]);
 
-  const addToCart = (product: Product, requestedQty?: number) => {
+  const addToCart = useCallback((product: Product, requestedQty?: number) => {
     const qty = requestedQty !== undefined ? requestedQty : (product.minOrderQty || 1);
     
     setItems(prevItems => {
@@ -90,9 +90,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     setIsCartOpen(true);
-  };
+  }, []);
 
-  const addMultipleToCart = (itemsToAdd: { product: Product; quantity?: number }[]) => {
+  const addMultipleToCart = useCallback((itemsToAdd: { product: Product; quantity?: number }[]) => {
     if (!itemsToAdd || itemsToAdd.length === 0) return;
 
     setItems(prevItems => {
@@ -126,9 +126,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     setIsCartOpen(true);
-  };
+  }, []);
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const addItem = useCallback((product: Product, quantity?: number) => {
+    addToCart(product, quantity || 1);
+  }, [addToCart]);
+
+  const updateQuantity = useCallback((productId: string, quantity: number) => {
     setItems(prevItems => {
       if (quantity <= 0) {
         return prevItems.filter(item => item.product.id !== productId);
@@ -148,20 +152,20 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return item;
       });
     });
-  };
+  }, []);
 
-  const removeFromCart = (productId: string) => {
+  const removeFromCart = useCallback((productId: string) => {
     setItems(prev => prev.filter(i => i.product.id !== productId));
-  };
+  }, []);
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setItems([]);
-  };
+  }, []);
 
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = Number(items.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2));
+  const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
+  const subtotal = useMemo(() => Number(items.reduce((sum, item) => sum + item.subtotal, 0).toFixed(2)), [items]);
   // Est freight shipping is decided by the admin per product rather than a fixed amount
-  const shippingCost = items.length === 0
+  const shippingCost = useMemo(() => items.length === 0
     ? 0
     : Number(
         items
@@ -174,30 +178,45 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return sum + itemFreight;
           }, 0)
           .toFixed(2)
-      );
+      ), [items]);
   const tax = 0; // Estimated tax removed per business requirements
-  const total = Number((subtotal + shippingCost).toFixed(2));
+  const total = useMemo(() => Number((subtotal + shippingCost).toFixed(2)), [subtotal, shippingCost]);
+
+  const contextValue = useMemo(() => ({
+    items,
+    itemCount,
+    subtotal,
+    shippingCost,
+    tax,
+    total,
+    addToCart,
+    addMultipleToCart,
+    addItem,
+    updateQuantity,
+    removeFromCart,
+    clearCart,
+    calculateTierPrice: getProductTierPrice,
+    isCartOpen,
+    setIsCartOpen
+  }), [
+    items,
+    itemCount,
+    subtotal,
+    shippingCost,
+    tax,
+    total,
+    addToCart,
+    addMultipleToCart,
+    addItem,
+    updateQuantity,
+    removeFromCart,
+    clearCart,
+    isCartOpen,
+    setIsCartOpen
+  ]);
 
   return (
-    <CartContext.Provider
-      value={{
-        items,
-        itemCount,
-        subtotal,
-        shippingCost,
-        tax,
-        total,
-        addToCart,
-        addMultipleToCart,
-        addItem: (product: Product, quantity?: number) => addToCart(product, quantity || 1),
-        updateQuantity,
-        removeFromCart,
-        clearCart,
-        calculateTierPrice: getProductTierPrice,
-        isCartOpen,
-        setIsCartOpen
-      }}
-    >
+    <CartContext.Provider value={contextValue}>
       {children}
     </CartContext.Provider>
   );

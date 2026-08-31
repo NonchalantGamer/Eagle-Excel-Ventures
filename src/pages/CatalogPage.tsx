@@ -164,13 +164,13 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
 
   useEffect(() => {
     if (initialCategory) {
-      setSelectedCategory(initialCategory);
+      setSelectedCategory(prev => prev !== initialCategory ? initialCategory : prev);
     }
   }, [initialCategory]);
 
   useEffect(() => {
     if (initialFilter) {
-      setActiveFilterPreset(initialFilter);
+      setActiveFilterPreset(prev => prev !== initialFilter ? initialFilter : prev);
       if (initialFilter === 'deals') {
         setSortBy('discount_desc');
       } else if (initialFilter === 'bestsellers') {
