@@ -390,18 +390,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               title={currentUser ? (userProfile?.displayName ? `${userProfile.displayName}'s Profile` : 'Wholesale Profile') : 'Sign In to Wholesale Profile'}
               aria-label="User Profile"
-              className={`relative p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl transition-all cursor-pointer flex items-center justify-center group shrink-0 ${
-                currentView === 'profile'
-                  ? 'bg-[#F27D26]/20 text-[#F27D26] ring-2 ring-[#F27D26]/50 shadow-xs'
-                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-zinc-200'
+              className={`relative transition-all cursor-pointer flex items-center justify-center group shrink-0 ${
+                userProfile?.avatarUrl || userProfile?.photoURL || currentUser?.photoURL
+                  ? 'p-0 rounded-full bg-transparent border-0 ring-0 focus:outline-none'
+                  : `p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl ${
+                      currentView === 'profile'
+                        ? 'bg-[#F27D26]/20 text-[#F27D26] ring-2 ring-[#F27D26]/50 shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-zinc-200'
+                    }`
               }`}
             >
               {userProfile?.avatarUrl || userProfile?.photoURL || currentUser?.photoURL ? (
                 <img 
                   src={userProfile?.avatarUrl || userProfile?.photoURL || currentUser?.photoURL} 
-                  alt="Profile" 
+                  alt={userProfile?.displayName || 'Profile'} 
                   referrerPolicy="no-referrer"
-                  className="w-4 h-4 sm:w-5 sm:h-5 rounded-full object-cover ring-1 ring-[#F27D26]/40 group-hover:ring-[#F27D26] transition-all"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover transition-transform group-hover:scale-105 duration-200"
                 />
               ) : (
                 <UserIcon className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:scale-110 text-slate-700 dark:text-zinc-200 group-hover:text-[#F27D26]" />
