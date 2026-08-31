@@ -54,6 +54,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [quantity, setQuantity] = useState(10);
   const [copiedSku, setCopiedSku] = useState(false);
+  const [copiedShareUrl, setCopiedShareUrl] = useState(false);
   const [liveRating, setLiveRating] = useState<number>(() => product?.rating || 5.0);
   const [liveReviewsCount, setLiveReviewsCount] = useState<number>(() => product?.reviewsCount || 0);
 
@@ -111,13 +112,32 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     }
   };
 
-  const handleShareProduct = () => {
-    if (typeof navigator !== 'undefined') {
-      const shareUrl = `${window.location.origin}${window.location.pathname}#/catalog?sku=${encodeURIComponent(product.sku)}`;
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(shareUrl);
-        showToast('Direct product link copied to clipboard!', 'success');
+  const handleShareProduct = async () => {
+    if (typeof window === 'undefined') return;
+    const origin = window.location.origin;
+    const cleanPath = window.location.pathname.replace(/\/+$/, '');
+    const shareUrl = `${origin}${cleanPath}/#/product?id=${encodeURIComponent(product.id)}`;
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = shareUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
       }
+      setCopiedShareUrl(true);
+      showToast('Direct product link copied to clipboard!', 'success');
+      setTimeout(() => setCopiedShareUrl(false), 2500);
+    } catch (err) {
+      showToast('Unable to copy product link automatically.', 'warning');
     }
   };
 
@@ -165,12 +185,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </button>
             <button
               type="button"
+              id="product-modal-share-button"
               onClick={handleShareProduct}
-              className="p-2 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
-              title="Share Product"
+              className={`p-2 rounded-xl transition-all cursor-pointer ${
+                copiedShareUrl
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                  : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'
+              }`}
+              title={copiedShareUrl ? "Link Copied to Clipboard!" : "Copy Direct Product Link"}
               aria-label="Share Product Link"
             >
-              <Share2 className="w-4 h-4" />
+              {copiedShareUrl ? (
+                <Check className="w-4 h-4 text-emerald-500" />
+              ) : (
+                <Share2 className="w-4 h-4 text-[#F27D26]" />
+              )}
             </button>
             <button
               onClick={onClose}

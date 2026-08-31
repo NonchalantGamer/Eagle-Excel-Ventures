@@ -1,16 +1,19 @@
 import { useEffect } from 'react';
 
 /**
- * Checks if an element is a horizontally scrollable container
- * and can still scroll in the given direction.
+ * Traverses up the DOM tree from the event target to find if the cursor
+ * is positioned over a horizontally scrollable list/container.
  */
-function getHorizontalScrollContainer(
-  target: HTMLElement | null,
-  deltaY: number
-): HTMLElement | null {
+function getHorizontalScrollContainer(target: HTMLElement | null): HTMLElement | null {
   let curr: HTMLElement | null = target;
 
   while (curr && curr !== document.body && curr !== document.documentElement) {
+    const tagName = curr.tagName.toLowerCase();
+    // Do not intercept text areas or standard text inputs
+    if (tagName === 'textarea' || (tagName === 'input' && (curr as HTMLInputElement).type === 'text')) {
+      return null;
+    }
+
     // Check if the element has horizontal overflow
     const hasHorizontalOverflow = curr.scrollWidth > curr.clientWidth + 1;
 
@@ -22,26 +25,18 @@ function getHorizontalScrollContainer(
         const hasVerticalOverflow = curr.scrollHeight > curr.clientHeight + 1;
         const overflowY = style.overflowY;
         const isVerticallyScrollable =
-          hasVerticalOverflow && (overflowY === 'auto' || overflowY === 'scroll');
+          hasVerticalOverflow && (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay');
 
-        // Check if the container can scroll horizontally in the direction of deltaY
-        const canScrollRight = deltaY > 0 && curr.scrollLeft < curr.scrollWidth - curr.clientWidth - 1;
-        const canScrollLeft = deltaY < 0 && curr.scrollLeft > 1;
-
-        // If the container is primarily a horizontal list / table or cannot scroll vertically
-        if (!isVerticallyScrollable && (canScrollRight || canScrollLeft)) {
+        // If the container is strictly horizontal (no vertical scroll)
+        if (!isVerticallyScrollable) {
           return curr;
         }
 
-        // If it can scroll both directions (e.g. 2D table or code block), prioritize horizontal if vertical is constrained or at bounds
-        if (isVerticallyScrollable && (canScrollRight || canScrollLeft)) {
-          const canScrollDown = deltaY > 0 && curr.scrollTop < curr.scrollHeight - curr.clientHeight - 1;
-          const canScrollUp = deltaY < 0 && curr.scrollTop > 1;
-
-          // If it cannot scroll vertically in this direction, convert to horizontal scroll
-          if (!canScrollDown && !canScrollUp) {
-            return curr;
-          }
+        // If the container has both, treat as horizontal if horizontal ratio exceeds vertical
+        const hRatio = curr.scrollWidth / curr.clientWidth;
+        const vRatio = curr.scrollHeight / curr.clientHeight;
+        if (hRatio >= vRatio) {
+          return curr;
         }
       }
     }
@@ -53,41 +48,52 @@ function getHorizontalScrollContainer(
 }
 
 /**
- * Global hook to enable seamless horizontal scrolling via mouse wheel.
- * When the mouse cursor is over any horizontally scrollable list, ribbon,
- * thumbnail gallery, or table, mouse wheel events smoothly scroll it horizontally.
+ * Global hook to enforce strict scroll isolation:
+ * - As long as the mouse is over a horizontal list, ONLY horizontal scroll is possible
+ *   (vertical page scrolling is completely locked and wheel motion is converted to horizontal).
+ * - When the mouse is outside horizontal lists, standard vertical scrolling proceeds normally.
  */
 export function useHorizontalWheelScroll() {
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      // If the event is already primarily horizontal (trackpad swipe or horizontal tilt wheel), let default happen
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.deltaY === 0) {
-        return;
-      }
-
-      // If user is holding Shift or Ctrl/Meta (e.g. zooming), don't intercept
-      if (e.ctrlKey || e.metaKey || e.altKey) {
+      // If user is holding Ctrl or Meta (e.g. browser zoom), do not intercept
+      if (e.ctrlKey || e.metaKey) {
         return;
       }
 
       const target = e.target as HTMLElement | null;
       if (!target) return;
 
-      const container = getHorizontalScrollContainer(target, e.deltaY);
-      if (!container) return;
+      const container = getHorizontalScrollContainer(target);
+      if (!container) {
+        // Cursor is NOT over a horizontal list -> normal vertical scroll proceeds, no horizontal scroll
+        return;
+      }
 
-      // Calculate pixel delta based on deltaMode
-      let delta = e.deltaY;
+      // Cursor IS over a horizontal list:
+      // STRICT RULE: Lock out vertical scroll completely while mouse is placed on the horizontal list
+      e.preventDefault();
+
+      // Determine delta (from vertical wheel deltaY, shift+wheel, or horizontal trackpad deltaX)
+      let delta = 0;
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && e.deltaX !== 0) {
+        delta = e.deltaX;
+      } else {
+        delta = e.deltaY;
+      }
+
+      if (delta === 0) return;
+
+      // Normalize delta based on deltaMode (pixel vs line vs page)
       if (e.deltaMode === 1) {
-        // DOM_DELTA_LINE (Firefox default)
+        // DOM_DELTA_LINE (e.g. standard notched mouse wheel on Windows/Linux/Firefox)
         delta *= 28;
       } else if (e.deltaMode === 2) {
         // DOM_DELTA_PAGE
-        delta *= container.clientWidth * 0.8;
+        delta *= container.clientWidth * 0.75;
       }
 
-      // Prevent vertical page scroll and perform horizontal scroll seamlessly
-      e.preventDefault();
+      // Perform the horizontal scroll
       container.scrollLeft += delta;
     };
 
@@ -98,3 +104,4 @@ export function useHorizontalWheelScroll() {
     };
   }, []);
 }
+

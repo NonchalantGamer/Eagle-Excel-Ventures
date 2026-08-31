@@ -70,6 +70,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [quantity, setQuantity] = useState<number>(() => product?.minOrderQty || 10);
   const [copiedSku, setCopiedSku] = useState(false);
+  const [copiedShareUrl, setCopiedShareUrl] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'specs' | 'logistics' | 'reviews'>('overview');
   const [relatedFilter, setRelatedFilter] = useState<RelatedFilterType>('all');
   const [isZoomed, setIsZoomed] = useState(false);
@@ -169,13 +170,32 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     }
   };
 
-  const handleShareProduct = () => {
-    if (typeof navigator !== 'undefined') {
-      const shareUrl = `${window.location.origin}${window.location.pathname}#/product?id=${encodeURIComponent(product.id)}`;
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(shareUrl);
-        showToast('Direct product page link copied to clipboard!', 'success');
+  const handleShareProduct = async () => {
+    if (typeof window === 'undefined') return;
+    const origin = window.location.origin;
+    const cleanPath = window.location.pathname.replace(/\/+$/, '');
+    const shareUrl = `${origin}${cleanPath}/#/product?id=${encodeURIComponent(product.id)}`;
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = shareUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
       }
+      setCopiedShareUrl(true);
+      showToast('Direct product link copied to clipboard!', 'success');
+      setTimeout(() => setCopiedShareUrl(false), 2500);
+    } catch (err) {
+      showToast('Unable to copy product link automatically.', 'warning');
     }
   };
 
@@ -270,21 +290,37 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-xs font-bold text-slate-700 dark:text-zinc-300 transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Catalog</span>
+            <span className="hidden sm:inline">Back to Catalog</span>
+            <span className="sm:hidden">Back</span>
           </button>
           <button
             type="button"
+            id="share-product-top-btn"
             onClick={handleShareProduct}
-            className="p-1.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-zinc-300 transition-colors cursor-pointer"
-            title="Share Direct Product Link"
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+              copiedShareUrl
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                : 'bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300'
+            }`}
+            title="Copy direct product link to clipboard"
             aria-label="Share direct product link"
           >
-            <Share2 className="w-4 h-4" />
+            {copiedShareUrl ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Link Copied!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5 text-[#F27D26]" />
+                <span>Share</span>
+              </>
+            )}
           </button>
           <button
             type="button"
             onClick={() => toggleWishlist(product)}
-            className={`p-1.5 rounded-xl border transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl border transition-colors cursor-pointer inline-flex items-center gap-1.5 text-xs font-bold ${
               isSaved
                 ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
                 : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 hover:text-rose-500'
@@ -292,7 +328,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             title={isSaved ? 'Remove from saved wishlist' : 'Save to wholesale wishlist'}
             aria-label={isSaved ? 'Remove from wishlist' : 'Save to wishlist'}
           >
-            <Heart className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+            <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-current text-rose-500' : ''}`} />
+            <span className="hidden sm:inline">{isSaved ? 'Saved' : 'Wishlist'}</span>
           </button>
         </div>
       </div>
@@ -631,6 +668,47 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 >
                   <MessageSquare className="w-3.5 h-3.5 text-[#F27D26]" />
                   <span>Ask China Sourcing Agent</span>
+                </button>
+              </div>
+
+              {/* Share & Wishlist Quick Utility Row */}
+              <div className="pt-2 border-t border-slate-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-2.5">
+                <button
+                  type="button"
+                  id="product-page-share-button"
+                  onClick={handleShareProduct}
+                  className={`flex-1 min-w-[140px] py-2.5 px-3.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    copiedShareUrl
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-200'
+                  }`}
+                  title="Copy direct product link to clipboard"
+                >
+                  {copiedShareUrl ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-500 stroke-[2.5]" />
+                      <span>Direct Link Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-4 h-4 text-[#F27D26]" />
+                      <span>Share Product Link</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => toggleWishlist(product)}
+                  className={`flex-1 min-w-[140px] py-2.5 px-3.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    isSaved
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
+                      : 'bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-200 hover:text-rose-500'
+                  }`}
+                  title={isSaved ? 'Remove from saved wishlist' : 'Save to wholesale wishlist'}
+                >
+                  <Heart className={`w-4 h-4 ${isSaved ? 'fill-current text-rose-500' : ''}`} />
+                  <span>{isSaved ? 'Saved to Wishlist' : 'Add to Wishlist'}</span>
                 </button>
               </div>
             </div>
