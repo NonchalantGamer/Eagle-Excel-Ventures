@@ -18,6 +18,7 @@ import { getProductsFromDatabase, subscribeToProducts, getCachedProducts } from 
 import { Product, Order, PageView } from './types';
 import { INITIAL_PRODUCTS } from './data/seedData';
 import { useScrollReveal } from './hooks/useScrollReveal';
+import { useHorizontalWheelScroll } from './hooks/useHorizontalWheelScroll';
 import { User } from 'lucide-react';
 import { OAuthCallbackHandler, isOAuthCallbackOrPopup } from './components/auth/OAuthCallbackHandler';
 import { 
@@ -194,6 +195,9 @@ const MainApp: React.FC = () => {
 
   // Scroll reveal trigger
   useScrollReveal([currentView, products.length, searchQuery]);
+
+  // Seamless horizontal mouse wheel scrolling across all horizontal lists, tables & ribbons
+  useHorizontalWheelScroll();
 
   // Listen to browser navigation (hashchange, popstate)
   useEffect(() => {
