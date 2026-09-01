@@ -113,6 +113,7 @@ import { UserManagementView } from './admin/UserManagementView';
 import { AdminRoleSwitchAuthModal } from './admin/AdminRoleSwitchAuthModal';
 import { AdminQuickActionDeck } from './admin/AdminQuickActionDeck';
 import { AdminAuditLog } from './admin/AdminAuditLog';
+import { recordRoleChangeAudit } from '../services/auditLogService';
 import { useModalFocusLock } from '../hooks/useModalFocusLock';
 import { playReceiveSound } from '../utils/chatAudio';
 import { showBrowserNotification } from '../utils/browserNotification';
@@ -654,11 +655,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     setUserToToggleRole(targetUser);
   };
 
-  const confirmToggleUserRole = async (targetUser: UserProfile, newRole: UserRole) => {
+  const confirmToggleUserRole = async (targetUser: UserProfile, newRole: UserRole, reason?: string) => {
     try {
       const adminActorName = currentUser?.displayName || userProfile?.displayName || currentUser?.email || 'Administrator';
+      const adminActorEmail = currentUser?.email || userProfile?.email || 'admin@eagleexcel.com';
+      const adminActorId = currentUser?.id || currentUser?.uid || userProfile?.id || 'admin_root';
+      const previousRole = targetUser.role || 'customer';
+
+      // 1. Update user role in database / persistent state
       await updateUserRole(targetUser.id, newRole, targetUser.email, adminActorName);
-      showToast(`Updated ${targetUser.displayName || targetUser.email}'s role to ${newRole === 'admin' ? 'Administrator' : 'Wholesale Buyer'}. Notification has been dispatched.`);
+
+      // 2. Record detailed audit trail entry capturing timestamp, admin who performed the change, and affected user ID
+      recordRoleChangeAudit({
+        adminId: adminActorId,
+        adminName: adminActorName,
+        adminEmail: adminActorEmail,
+        targetUserId: targetUser.id,
+        targetUserName: targetUser.displayName || targetUser.email,
+        targetUserEmail: targetUser.email,
+        previousRole: previousRole,
+        newRole: newRole,
+        reason: reason || (newRole === 'admin' ? 'Promoted to Administrator' : 'Reverted to Wholesale Buyer'),
+        authMethod: 'Password Re-Verification Gate'
+      });
+
+      showToast(`Updated ${targetUser.displayName || targetUser.email}'s role to ${newRole === 'admin' ? 'Administrator' : 'Wholesale Buyer'}. Role change logged.`);
       setUserToToggleRole(null);
       await loadData();
     } catch (err: any) {

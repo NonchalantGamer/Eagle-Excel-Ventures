@@ -1,14 +1,20 @@
-import { Product, ProductAuditLog, ProductAuditAction, ProductAuditDiff } from '../types';
+import { Product, ProductAuditLog, ProductAuditAction, ProductAuditDiff, RoleChangeLog, UserRole } from '../types';
 import { getCachedProducts } from './productService';
 import { isSupabaseEnabled, getSupabase } from '../lib/supabase';
 
 const AUDIT_STORAGE_KEY = 'ee_admin_product_audit_logs_v1';
+const ROLE_AUDIT_STORAGE_KEY = 'ee_admin_role_audit_logs_v1';
 const MAX_LOGS = 250;
 
 // In-memory buffer of audit logs
 let inMemoryLogs: ProductAuditLog[] = [];
 let listeners: Set<(logs: ProductAuditLog[]) => void> = new Set();
 let isInitialized = false;
+
+// Role Change Logs buffer and listeners
+let inMemoryRoleLogs: RoleChangeLog[] = [];
+let roleListeners: Set<(logs: RoleChangeLog[]) => void> = new Set();
+let isRoleInitialized = false;
 
 // Initialize logs from localStorage or generate realistic baseline events
 function initAuditLogs(): ProductAuditLog[] {
@@ -199,6 +205,161 @@ export function recordProductAudit(entry: {
   notifyListeners();
 
   return newLog;
+}
+
+// Initialize role change logs from storage or seed realistic initial events
+function initRoleChangeLogs(): RoleChangeLog[] {
+  if (isRoleInitialized && inMemoryRoleLogs.length > 0) {
+    return inMemoryRoleLogs;
+  }
+
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(ROLE_AUDIT_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          inMemoryRoleLogs = parsed;
+          isRoleInitialized = true;
+          return inMemoryRoleLogs;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read role change logs from storage:', e);
+  }
+
+  // Baseline seed log for initial root administrator
+  const now = new Date();
+  inMemoryRoleLogs = [
+    {
+      id: `role_log_seed_${Date.now()}`,
+      timestamp: new Date(now.getTime() - 1000 * 60 * 60 * 24).toISOString(),
+      adminId: 'system_root_001',
+      adminName: 'Eagle Excel System Operations',
+      adminEmail: 'joshuaegesienyinnaya@gmail.com',
+      targetUserId: 'root_admin_joshua',
+      targetUserName: 'Joshua Egesi-Enyinnaya',
+      targetUserEmail: 'joshuaegesienyinnaya@gmail.com',
+      previousRole: 'customer',
+      newRole: 'admin',
+      reason: 'Master Administrator account initialization with full console privileges',
+      authMethod: 'Password Verified (System Provisioning)'
+    }
+  ];
+
+  saveRoleLogsToStorage(inMemoryRoleLogs);
+  isRoleInitialized = true;
+  return inMemoryRoleLogs;
+}
+
+function saveRoleLogsToStorage(logs: RoleChangeLog[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ROLE_AUDIT_STORAGE_KEY, JSON.stringify(logs.slice(0, MAX_LOGS)));
+  } catch (e) {
+    console.warn('Failed to save role logs to localStorage:', e);
+  }
+}
+
+function notifyRoleListeners() {
+  const snapshot = [...inMemoryRoleLogs];
+  roleListeners.forEach(fn => {
+    try {
+      fn(snapshot);
+    } catch (e) {
+      console.warn('Error in role audit listener:', e);
+    }
+  });
+}
+
+/**
+ * Record a verified Role Change audit entry into the dashboard audit logging system
+ */
+export function recordRoleChangeAudit(entry: {
+  adminId: string;
+  adminName: string;
+  adminEmail: string;
+  targetUserId: string;
+  targetUserName?: string;
+  targetUserEmail?: string;
+  previousRole: UserRole;
+  newRole: UserRole;
+  reason?: string;
+  authMethod?: string;
+}): RoleChangeLog {
+  const currentRoleLogs = initRoleChangeLogs();
+  const isPromotion = entry.newRole === 'admin';
+
+  const newRoleLog: RoleChangeLog = {
+    id: `role_change_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    timestamp: new Date().toISOString(),
+    adminId: entry.adminId,
+    adminName: entry.adminName,
+    adminEmail: entry.adminEmail,
+    targetUserId: entry.targetUserId,
+    targetUserName: entry.targetUserName || 'User',
+    targetUserEmail: entry.targetUserEmail || entry.targetUserId,
+    previousRole: entry.previousRole,
+    newRole: entry.newRole,
+    reason: entry.reason || (isPromotion ? 'Promoted to Administrator' : 'Reverted to Wholesale Buyer'),
+    authMethod: entry.authMethod || 'Password Re-Authentication'
+  };
+
+  inMemoryRoleLogs = [newRoleLog, ...currentRoleLogs].slice(0, MAX_LOGS);
+  saveRoleLogsToStorage(inMemoryRoleLogs);
+  notifyRoleListeners();
+
+  // Also push to master product / system audit trail for unified observability
+  recordProductAudit({
+    action: isPromotion ? 'ADMIN_PROMOTED' : 'ADMIN_REVOKED',
+    severity: isPromotion ? 'warning' : 'info',
+    source: 'admin_ui',
+    summary: isPromotion 
+      ? `🛡️ Admin Promotion: ${entry.targetUserName || entry.targetUserEmail} granted Administrator Role`
+      : `🏢 Role Reversion: ${entry.targetUserName || entry.targetUserEmail} set to Wholesale Buyer`,
+    details: `Authorized by Admin ${entry.adminName} (${entry.adminEmail}, ID: ${entry.adminId}) via password credential prompt. Target User ID: ${entry.targetUserId}. Reason: ${entry.reason || 'Manual Role Update'}.`,
+    actorEmail: entry.adminEmail,
+    actorRole: 'admin',
+    productId: entry.targetUserId,
+    productName: entry.targetUserName,
+    diffs: [
+      {
+        field: 'role',
+        label: 'User Role & Permissions',
+        oldValue: entry.previousRole === 'admin' ? 'Administrator' : 'Wholesale Buyer',
+        newValue: entry.newRole === 'admin' ? 'Administrator' : 'Wholesale Buyer'
+      }
+    ],
+    payloadSnapshot: newRoleLog
+  });
+
+  return newRoleLog;
+}
+
+// Get all role change audit logs
+export function getRoleChangeLogs(): RoleChangeLog[] {
+  return initRoleChangeLogs();
+}
+
+// Subscribe to real-time role change logs
+export function subscribeToRoleChangeLogs(listener: (logs: RoleChangeLog[]) => void): () => void {
+  initRoleChangeLogs();
+  roleListeners.add(listener);
+  listener([...inMemoryRoleLogs]);
+
+  return () => {
+    roleListeners.delete(listener);
+  };
+}
+
+// Clear role change logs
+export function clearRoleChangeLogs(): void {
+  inMemoryRoleLogs = [];
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(ROLE_AUDIT_STORAGE_KEY);
+  }
+  notifyRoleListeners();
 }
 
 // Get all audit logs

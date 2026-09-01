@@ -339,7 +339,10 @@ export type ProductAuditAction =
   | 'REALTIME_DELETE_RECEIVED'
   | 'SSE_STREAM_SYNC'
   | 'DIAGNOSTIC_VERIFY'
-  | 'SCHEMA_CACHE_RELOAD';
+  | 'SCHEMA_CACHE_RELOAD'
+  | 'USER_ROLE_CHANGED'
+  | 'ADMIN_PROMOTED'
+  | 'ADMIN_REVOKED';
 
 export type AuditLogSeverity = 'info' | 'success' | 'warning' | 'error';
 export type AuditLogSource = 'admin_ui' | 'supabase_realtime' | 'sse_stream' | 'server_api' | 'local_cache' | 'system';
@@ -349,6 +352,21 @@ export interface ProductAuditDiff {
   label: string;
   oldValue: any;
   newValue: any;
+}
+
+export interface RoleChangeLog {
+  id: string;
+  timestamp: string;
+  adminId: string;
+  adminName: string;
+  adminEmail: string;
+  targetUserId: string;
+  targetUserName?: string;
+  targetUserEmail?: string;
+  previousRole: UserRole;
+  newRole: UserRole;
+  reason?: string;
+  authMethod?: string;
 }
 
 export interface ProductAuditLog {
@@ -366,6 +384,13 @@ export interface ProductAuditLog {
   diffs?: ProductAuditDiff[];
   actorEmail?: string;
   actorRole?: string;
+  adminId?: string;
+  adminName?: string;
+  targetUserId?: string;
+  targetUserName?: string;
+  targetUserEmail?: string;
+  previousRole?: UserRole;
+  newRole?: UserRole;
   payloadSnapshot?: any;
   syncLatencyMs?: number;
   clientMemoryCount?: number;

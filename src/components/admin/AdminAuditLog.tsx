@@ -23,6 +23,8 @@ import {
   Boxes, 
   Activity, 
   ShieldCheck, 
+  ShieldAlert,
+  UserCheck,
   Server, 
   Zap,
   Clock,
@@ -178,8 +180,9 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({
     const deleted = logs.filter(l => l.action === 'PRODUCT_DELETED' || l.action === 'REALTIME_DELETE_RECEIVED').length;
     const realtime = logs.filter(l => l.source === 'supabase_realtime' || l.source === 'sse_stream').length;
     const diagnostics = logs.filter(l => l.action === 'DIAGNOSTIC_VERIFY').length;
+    const roleChanges = logs.filter(l => l.action === 'USER_ROLE_CHANGED' || l.action === 'ADMIN_PROMOTED' || l.action === 'ADMIN_REVOKED').length;
 
-    return { total, created, updated, deleted, realtime, diagnostics };
+    return { total, created, updated, deleted, realtime, diagnostics, roleChanges };
   }, [logs]);
 
   // Filtered logs
@@ -207,6 +210,7 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({
         if (selectedActionFilter === 'DELETED' && log.action !== 'PRODUCT_DELETED' && log.action !== 'REALTIME_DELETE_RECEIVED') return false;
         if (selectedActionFilter === 'REALTIME' && !log.action.startsWith('REALTIME_') && log.action !== 'SSE_STREAM_SYNC') return false;
         if (selectedActionFilter === 'DIAGNOSTICS' && log.action !== 'DIAGNOSTIC_VERIFY') return false;
+        if (selectedActionFilter === 'ROLE_CHANGES' && log.action !== 'USER_ROLE_CHANGED' && log.action !== 'ADMIN_PROMOTED' && log.action !== 'ADMIN_REVOKED') return false;
       }
 
       // Severity Filter
@@ -226,6 +230,24 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({
   // Helper for Action Badge Colors & Icons
   const getActionBadge = (action: ProductAuditAction) => {
     switch (action) {
+      case 'ADMIN_PROMOTED':
+        return {
+          label: 'Admin Promoted',
+          icon: <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />,
+          classes: 'bg-amber-50 text-amber-800 border-amber-300'
+        };
+      case 'ADMIN_REVOKED':
+        return {
+          label: 'Role Reverted',
+          icon: <ShieldAlert className="w-3.5 h-3.5 text-blue-600" />,
+          classes: 'bg-blue-50 text-blue-800 border-blue-300'
+        };
+      case 'USER_ROLE_CHANGED':
+        return {
+          label: 'Role Changed',
+          icon: <UserCheck className="w-3.5 h-3.5 text-purple-600" />,
+          classes: 'bg-purple-50 text-purple-800 border-purple-300'
+        };
       case 'PRODUCT_CREATED':
         return {
           label: 'Created',
@@ -485,6 +507,14 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({
           <div className="text-2xl font-bold text-slate-700 mt-1">{stats.diagnostics}</div>
           <span className="text-[11px] text-gray-400 mt-0.5 block">Parity integrity checks</span>
         </div>
+
+        <div className="bg-white p-4 rounded-xl border border-gray-200/90 shadow-xs">
+          <span className="text-xs font-medium text-amber-700 flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5" /> Staff Roles
+          </span>
+          <div className="text-2xl font-bold text-amber-600 mt-1">{stats.roleChanges}</div>
+          <span className="text-[11px] text-gray-400 mt-0.5 block">Admin role transitions</span>
+        </div>
       </div>
 
       {/* 3. Filter and Search Controls */}
@@ -496,7 +526,7 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({
             <input
               id="audit-search-input"
               type="text"
-              placeholder="Search by product name, SKU, ID, reason, or user..."
+              placeholder="Search by product name, SKU, ID, user ID, or admin..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-gray-50/80 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -515,6 +545,7 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({
           <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
             {[
               { id: 'ALL', label: 'All Actions' },
+              { id: 'ROLE_CHANGES', label: '🛡️ Role Changes' },
               { id: 'CREATED', label: 'Created' },
               { id: 'UPDATED', label: 'Updated' },
               { id: 'PRICE_STOCK', label: 'Price & Stock' },

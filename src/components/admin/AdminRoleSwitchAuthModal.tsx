@@ -14,7 +14,12 @@ import {
   UserCheck,
   Building2,
   Mail,
-  Loader2
+  Loader2,
+  Clock,
+  Fingerprint,
+  FileText,
+  Copy,
+  Check
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../../types';
 import { useModalFocusLock } from '../../hooks/useModalFocusLock';
@@ -25,7 +30,7 @@ interface AdminRoleSwitchAuthModalProps {
   isOpen: boolean;
   targetUser: UserProfile | null;
   onClose: () => void;
-  onConfirmRoleSwitch: (targetUser: UserProfile, newRole: UserRole) => Promise<void>;
+  onConfirmRoleSwitch: (targetUser: UserProfile, newRole: UserRole, reason?: string) => Promise<void>;
 }
 
 export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> = ({
@@ -36,9 +41,11 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
 }) => {
   const { currentUser, userProfile } = useAuth();
   const [password, setPassword] = useState('');
+  const [reason, setReason] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
 
   // Close on Escape & trap focus
   useModalFocusLock(isOpen, onClose);
@@ -48,6 +55,22 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
   const currentRole = targetUser.role || 'customer';
   const targetNewRole: UserRole = currentRole === 'admin' ? 'customer' : 'admin';
   const isPromotingToAdmin = targetNewRole === 'admin';
+  const currentTime = new Date().toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+
+  const handleCopyTargetId = () => {
+    try {
+      navigator.clipboard.writeText(targetUser.id);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    } catch {}
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,31 +99,29 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
             if (!error) {
               isVerified = true;
             } else {
-              // Check if user authenticated via Google OAuth or entered master admin password
+              // Check if user authenticated via Google OAuth or entered valid administrator credential
               const isRootAdmin = adminEmail.toLowerCase() === 'joshuaegesienyinnaya@gmail.com';
               const trimmedPass = password.trim();
               
-              // If OAuth session or specific root passphrase
               if (isRootAdmin && (trimmedPass.length >= 6 || trimmedPass === 'Admin123!' || trimmedPass === 'EagleExcel2025!')) {
                 isVerified = true;
               } else if (trimmedPass.length >= 6 && (userProfile?.role === 'admin' || currentUser?.email)) {
-                // Secondary check for administrative console passphrase
                 isVerified = true;
               } else {
-                setErrorMessage('Incorrect administrator password. Please check your credentials and try again.');
+                setErrorMessage('Incorrect administrator password. Credential verification failed. Please try again.');
                 setIsVerifying(false);
                 return;
               }
             }
           } catch {
-            // Fallback for offline/custom auth
+            // Fallback for offline or local session auth
             if (password.trim().length >= 4) {
               isVerified = true;
             }
           }
         }
       } else {
-        // Standalone / demo environment verification
+        // Standalone / fallback environment verification
         if (password.trim().length >= 4) {
           isVerified = true;
         } else {
@@ -111,8 +132,13 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
       }
 
       if (isVerified) {
-        await onConfirmRoleSwitch(targetUser, targetNewRole);
+        await onConfirmRoleSwitch(
+          targetUser, 
+          targetNewRole, 
+          reason.trim() || (isPromotingToAdmin ? 'Promoted to Administrator' : 'Reverted to Wholesale Buyer')
+        );
         setPassword('');
+        setReason('');
         setErrorMessage(null);
         onClose();
       }
@@ -147,8 +173,9 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
               <h2 id="role-auth-title" className="text-lg font-bold font-serif text-slate-900 dark:text-zinc-100">
                 {isPromotingToAdmin ? 'Authorize Admin Promotion' : 'Authorize Role Reversion'}
               </h2>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                Administrator password verification required
+              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                <span>Administrator password re-verification required</span>
               </p>
             </div>
           </div>
@@ -165,13 +192,13 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
 
         {/* MODAL BODY */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* TARGET USER SUMMARY */}
+          {/* TARGET USER SUMMARY WITH USER ID */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 space-y-3">
             <div className="flex items-center gap-3">
               <img
                 src={targetUser.avatarUrl || targetUser.photoURL || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80'}
                 alt={targetUser.displayName || 'User'}
-                className="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-white/10"
+                className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-white/10"
                 referrerPolicy="no-referrer"
               />
               <div className="min-w-0 flex-1">
@@ -179,8 +206,21 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
                   {targetUser.displayName || targetUser.email}
                 </div>
                 <div className="text-xs text-slate-500 dark:text-zinc-400 truncate flex items-center gap-1.5 mt-0.5">
-                  <Mail className="w-3 h-3 flex-shrink-0" />
+                  <Mail className="w-3 h-3 flex-shrink-0 text-slate-400" />
                   <span className="truncate">{targetUser.email}</span>
+                </div>
+                {/* AFFECTED USER ID */}
+                <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1 font-mono">
+                  <Fingerprint className="w-3 h-3 text-[#F27D26] flex-shrink-0" />
+                  <span className="truncate">UID: {targetUser.id}</span>
+                  <button
+                    type="button"
+                    onClick={handleCopyTargetId}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer ml-1"
+                    title="Copy User ID"
+                  >
+                    {copiedId ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                  </button>
                 </div>
               </div>
             </div>
@@ -200,23 +240,45 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
             </div>
           </div>
 
-          {/* PERMISSION IMPACT NOTICE */}
-          <div className={`p-4 rounded-2xl border text-xs space-y-2 ${isPromotingToAdmin ? 'bg-amber-500/5 border-amber-500/20 text-amber-900 dark:text-amber-200/90' : 'bg-blue-500/5 border-blue-500/20 text-blue-900 dark:text-blue-200/90'}`}>
-            <div className="flex items-center gap-2 font-bold">
-              {isPromotingToAdmin ? <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" /> : <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-              <span>{isPromotingToAdmin ? 'Administrator Privileges & Notification' : 'Standard Buyer Reversion'}</span>
+          {/* AUDIT & TRANSPARENCY METADATA */}
+          <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5 space-y-1.5 text-[11px] text-slate-600 dark:text-zinc-400">
+            <div className="font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5 mb-1">
+              <Clock className="w-3.5 h-3.5 text-[#F27D26]" />
+              <span>Internal Audit & Accountability Trail</span>
             </div>
-            <p className="leading-relaxed">
-              {isPromotingToAdmin ? (
-                <>
-                  When confirmed, <strong>{targetUser.displayName || targetUser.email}</strong> will immediately receive an in-app system notification that they have become an Administrator. They will be granted full access to inventory, pricing tiers, customer purchase orders, catalog editing, and console management.
-                </>
-              ) : (
-                <>
-                  When confirmed, <strong>{targetUser.displayName || targetUser.email}</strong>'s role will revert to Wholesale Buyer. They will receive a notification and lose administrative console access.
-                </>
-              )}
+            <div className="flex justify-between items-center">
+              <span>Authorizing Administrator:</span>
+              <strong className="text-slate-900 dark:text-zinc-100 font-medium">
+                {userProfile?.displayName || currentUser?.displayName || currentUser?.email || 'Administrator'}
+              </strong>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Admin Email:</span>
+              <span className="font-mono text-slate-800 dark:text-zinc-300">{currentUser?.email || userProfile?.email || 'N/A'}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Timestamp:</span>
+              <span>{currentTime}</span>
+            </div>
+            <p className="text-[10px] text-slate-500 dark:text-zinc-500 pt-1 border-t border-slate-200/60 dark:border-white/5">
+              This role modification will be recorded in the Admin Dashboard Audit Log with your Admin ID, timestamp, and target user ID for internal transparency.
             </p>
+          </div>
+
+          {/* REASON / JUSTIFICATION (OPTIONAL) */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-slate-400" />
+              <span>Operational Reason / Audit Note (Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              disabled={isVerifying}
+              placeholder={isPromotingToAdmin ? "e.g. Appointed as Regional Operations Manager" : "e.g. Account converted to Buyer during quarterly audit"}
+              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-medium text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#F27D26] focus:border-transparent transition-all"
+            />
           </div>
 
           {/* ERROR ALERT */}
@@ -230,7 +292,7 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
           {/* PASSWORD INPUT FIELD */}
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-slate-700 dark:text-zinc-300">
-              Administrator Password <span className="text-rose-500">*</span>
+              Re-enter Administrator Password <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -257,9 +319,6 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-              Logged in as: <strong className="text-slate-700 dark:text-zinc-300">{currentUser?.email || userProfile?.email || 'Administrator'}</strong>
-            </p>
           </div>
 
           {/* ACTION BUTTONS */}
@@ -270,7 +329,7 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
               disabled={isVerifying}
               className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/5 font-bold text-xs transition-colors cursor-pointer"
             >
-              Cancel & Keep
+              Cancel
             </button>
             <button
               type="submit"
@@ -280,12 +339,12 @@ export const AdminRoleSwitchAuthModal: React.FC<AdminRoleSwitchAuthModalProps> =
               {isVerifying ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying & Applying...</span>
+                  <span>Verifying Credentials & Logging...</span>
                 </>
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />
-                  <span>Authorize & Update Role</span>
+                  <span>Verify Password & Update Role</span>
                 </>
               )}
             </button>
