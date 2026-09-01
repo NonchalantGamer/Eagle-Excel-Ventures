@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { isSupabaseEnabled, getSupabase } from '../lib/supabase';
-import { getUserProfile, saveUserProfile, subscribeToUserProfile, getAssignedRole } from '../services/userService';
+import { getUserProfile, saveUserProfile, subscribeToUserProfile, getAssignedRole, fetchServerRoleOverrides } from '../services/userService';
 import { handlePostAuthProfileTrigger } from '../services/postAuthTrigger';
 import {
   loginWithEmailAndPassword,
@@ -135,6 +135,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Post-authentication profile trigger: verifies public.profiles record and creates if missing
   const ensureProfileDocument = async (user: AppUser): Promise<UserProfile> => {
+    // 1. Fetch freshest authoritative role overrides from server
+    await fetchServerRoleOverrides().catch(() => {});
+
     const isRootAdmin = user.email?.toLowerCase() === ROOT_ADMIN_EMAIL.toLowerCase();
     const assigned = getAssignedRole(user.uid, user.email);
 
@@ -148,7 +151,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ]);
 
       const profile = triggerResult.profile;
-      if (assigned && profile.role !== assigned) {
+      if (isRootAdmin) {
+        profile.role = 'admin';
+      } else if (assigned) {
         profile.role = assigned;
       }
       setCachedUserProfile(profile);
@@ -176,12 +181,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   useEffect(() => {
-    // Handler for real-time role change event
-    const handleRoleChangedEvent = (targetUserId?: string, targetEmail?: string, newRole?: UserRole) => {
-      if (!newRole) return;
+    // 0. Initial sync of server-authoritative role overrides
+    fetchServerRoleOverrides().then(() => {
       setUserProfile((prev) => {
         if (!prev) return prev;
-        const matchesId = targetUserId && prev.id === targetUserId;
+        const assigned = getAssignedRole(prev.id, prev.email);
+        if (assigned && assigned !== prev.role) {
+          const updated = { ...prev, role: assigned, updatedAt: new Date().toISOString() };
+          setCachedUserProfile(updated);
+          return updated;
+        }
+        return prev;
+      });
+    }).catch(() => {});
+
+    // Handler for real-time role change event across all channels
+    const handleRoleChangedEvent = (targetUserId?: string, targetEmail?: string, newRole?: UserRole) => {
+      if (!newRole) return;
+      if (targetUserId) setCachedUserProfile({ id: targetUserId, role: newRole } as any);
+      setUserProfile((prev) => {
+        if (!prev) return prev;
+        const matchesId = targetUserId && (prev.id === targetUserId || prev.id.toLowerCase() === targetUserId.toLowerCase());
         const matchesEmail = targetEmail && prev.email?.toLowerCase() === targetEmail.toLowerCase();
         if (matchesId || matchesEmail) {
           const updated = { ...prev, role: newRole, updatedAt: new Date().toISOString() };
@@ -201,7 +221,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     window.addEventListener('eagle_excel_user_role_changed', handleCustomRoleEvent);
 
-    // Listen on BroadcastChannel for role sync
+    // Listen on BroadcastChannel for same-origin cross-tab role sync
     let roleBroadcastChannel: BroadcastChannel | null = null;
     try {
       if (typeof BroadcastChannel !== 'undefined') {
@@ -213,6 +233,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
       }
     } catch (e) {}
+
+    // Listen on Server SSE Stream for Cross-Device / Mobile Real-Time Role Sync
+    let sseEventSource: EventSource | null = null;
+    try {
+      sseEventSource = new EventSource('/api/messages/stream?role=customer');
+      sseEventSource.addEventListener('user_role_changed', (evt: MessageEvent) => {
+        try {
+          const payload = JSON.parse(evt.data);
+          if (payload && payload.userId && payload.role) {
+            handleRoleChangedEvent(payload.userId, payload.email, payload.role);
+          }
+        } catch (e) {}
+      });
+    } catch (e) {}
+
+    // Listen on Supabase Realtime broadcast channel
+    let supabaseSyncChannel: any = null;
+    if (isSupabaseEnabled()) {
+      const supabase = getSupabase();
+      if (supabase) {
+        supabaseSyncChannel = supabase.channel('ee_global_sync')
+          .on('broadcast', { event: 'USER_ROLE_CHANGED' }, (payload: any) => {
+            const d = payload?.payload;
+            if (d && (d.userId || d.email) && d.role) {
+              handleRoleChangedEvent(d.userId, d.email, d.role);
+            }
+          })
+          .subscribe();
+      }
+    }
+
+    // Refresh role overrides when returning to the tab or app on mobile devices
+    const handleVisibilityOrFocus = async () => {
+      await fetchServerRoleOverrides().catch(() => {});
+      setUserProfile((prev) => {
+        if (!prev) return prev;
+        const assigned = getAssignedRole(prev.id, prev.email);
+        if (assigned && assigned !== prev.role) {
+          const updated = { ...prev, role: assigned, updatedAt: new Date().toISOString() };
+          setCachedUserProfile(updated);
+          return updated;
+        }
+        return prev;
+      });
+    };
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
 
     const handleAuthEvent = async (userHint?: any, sessionHint?: any) => {
       const supabase = getSupabase();
@@ -376,6 +443,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       window.removeEventListener('message', handleAuthMessage);
       window.removeEventListener('storage', handleStorageEvent);
       window.removeEventListener('eagle_excel_user_role_changed', handleCustomRoleEvent);
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      if (sseEventSource) {
+        try { sseEventSource.close(); } catch (e) {}
+      }
+      if (supabaseSyncChannel && isSupabaseEnabled()) {
+        try { getSupabase()?.removeChannel(supabaseSyncChannel); } catch (e) {}
+      }
       if (broadcastChannel) {
         try { broadcastChannel.close(); } catch (e) {}
       }

@@ -23,6 +23,27 @@ export function getRoleOverrides(): Record<string, UserRole> {
 }
 
 /**
+ * Fetches server-side authoritative role overrides and synchronizes them into local storage.
+ */
+export async function fetchServerRoleOverrides(): Promise<Record<string, UserRole>> {
+  try {
+    const res = await fetch('/api/users/roles');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.overrides) {
+        const current = getRoleOverrides();
+        const merged = { ...current, ...data.overrides };
+        localStorage.setItem(ROLE_OVERRIDES_STORAGE_KEY, JSON.stringify(merged));
+        return merged;
+      }
+    }
+  } catch (e) {
+    console.warn('[userService] Server role overrides fetch notice:', e);
+  }
+  return getRoleOverrides();
+}
+
+/**
  * Persists an assigned role override for a specific user ID and email.
  */
 export function setRoleOverride(identifier: string, role: UserRole): void {
@@ -47,6 +68,7 @@ export function getAssignedRole(userId?: string, email?: string): UserRole | nul
   
   const overrides = getRoleOverrides();
   if (userId && overrides[userId]) return overrides[userId];
+  if (userId && overrides[userId.toLowerCase()]) return overrides[userId.toLowerCase()];
   if (emailLower && overrides[emailLower]) return overrides[emailLower];
   if (email && overrides[email]) return overrides[email];
   return null;
@@ -134,7 +156,7 @@ export function normalizeUserProfileRow(d: any): UserProfile | null {
 }
 
 /**
- * Assigns 'admin' or 'customer' role to a user, updating Supabase (RPC & Tables), local overrides, and realtime broadcast.
+ * Assigns 'admin' or 'customer' role to a user, updating Supabase (RPC & Tables), Server backend (/api/users/role), local overrides, and realtime broadcast.
  */
 export async function assignAdminClaim(
   targetUid: string, 
@@ -162,7 +184,26 @@ export async function assignAdminClaim(
     setRoleOverride(resolvedEmail, targetRole);
   }
 
-  // 3. Update local storage cache for instant 0ms UI feedback
+  // 3. Post to Server Backend Authoritative Store & Trigger Server SSE Broadcast
+  try {
+    const serverPayload = {
+      userId: targetUid,
+      role: targetRole,
+      email: resolvedEmail,
+      actorName: actorName || 'Administrator',
+      reason: targetRole === 'admin' ? 'Promoted to Administrator' : 'Reverted to Wholesale Buyer'
+    };
+
+    fetch('/api/users/role', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(serverPayload)
+    }).catch(e => console.warn('[userService] Server /api/users/role notice:', e));
+  } catch (err) {
+    console.warn('[userService] Server role broadcast notice:', err);
+  }
+
+  // 4. Update local storage cache for instant 0ms UI feedback
   const updatedList = localList.map(u => {
     if (u.id === targetUid || (resolvedEmail && u.email?.toLowerCase() === resolvedEmail.toLowerCase())) {
       return { ...u, role: targetRole, updatedAt: new Date().toISOString() };
@@ -183,7 +224,7 @@ export async function assignAdminClaim(
     }
   } catch {}
 
-  // 4. Dispatch notification to the target user
+  // 5. Dispatch notification to the target user
   try {
     const targetDisplayName = matchedUser?.displayName || (resolvedEmail ? resolvedEmail.split('@')[0] : 'User');
     if (isAdmin) {
@@ -193,7 +234,7 @@ export async function assignAdminClaim(
     }
   } catch {}
 
-  // 5. Dispatch local cross-tab / window sync events
+  // 6. Dispatch local cross-tab / window sync events
   try {
     window.dispatchEvent(new CustomEvent('eagle_excel_user_role_changed', {
       detail: { userId: targetUid, email: resolvedEmail, role: targetRole }
@@ -215,7 +256,7 @@ export async function assignAdminClaim(
     return {
       success: true,
       role: targetRole,
-      message: `Updated user role to ${targetRole} in local system.`
+      message: `Updated user role to ${targetRole} across server and local storage.`
     };
   }
 
@@ -322,18 +363,43 @@ export async function checkCurrentUserAdminClaim(): Promise<boolean> {
 
 // Fetch single user profile
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
-  const local = getLocalUsers().find(u => u.id === userId);
+  const local = getLocalUsers().find(u => u.id === userId || (u.email && u.email.toLowerCase() === userId.toLowerCase()));
+  
+  // 1. Try server backend endpoint
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(userId)}`);
+    if (res.ok) {
+      const serverUser = await res.json();
+      if (serverUser && serverUser.id) {
+        const assigned = getAssignedRole(serverUser.id, serverUser.email);
+        const resolvedRole = assigned || serverUser.role || 'customer';
+        const finalProfile = { ...serverUser, role: resolvedRole };
+        return finalProfile;
+      }
+    }
+  } catch (e) {
+    // Server fetch fallback
+  }
+
   if (!isSupabaseEnabled()) {
-    return local || null;
+    if (local) {
+      const assigned = getAssignedRole(local.id, local.email);
+      return { ...local, role: assigned || local.role || 'customer' };
+    }
+    return null;
   }
 
   const supabase = getSupabase();
   if (!supabase) {
-    return local || null;
+    if (local) {
+      const assigned = getAssignedRole(local.id, local.email);
+      return { ...local, role: assigned || local.role || 'customer' };
+    }
+    return null;
   }
 
   try {
-    // 1. Try public.profiles first
+    // 2. Try public.profiles in Supabase
     const { data: profileData, error: profileErr } = await supabase
       .from(PROFILES_TABLE)
       .select('*')
@@ -345,7 +411,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       if (normalized) return normalized;
     }
 
-    // 2. Fallback to public.users if not found in profiles
+    // 3. Fallback to public.users if not found in profiles
     const { data: userData } = await supabase
       .from(USERS_TABLE)
       .select('*')
@@ -357,9 +423,17 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       if (normalized) return normalized;
     }
 
-    return local || null;
+    if (local) {
+      const assigned = getAssignedRole(local.id, local.email);
+      return { ...local, role: assigned || local.role || 'customer' };
+    }
+    return null;
   } catch (error) {
-    return local || null;
+    if (local) {
+      const assigned = getAssignedRole(local.id, local.email);
+      return { ...local, role: assigned || local.role || 'customer' };
+    }
+    return null;
   }
 }
 
@@ -477,31 +551,78 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
 /**
  * Comprehensive multi-source User Fetcher for the Admin Dashboard.
  * Queries:
- * 1. public.profiles
- * 2. public.users
- * 3. public.orders (extracts registered customer buyers and aggregates revenue metrics)
- * 4. public.messages (extracts active chat customers)
- * 5. localStorage cache
+ * 1. Server backend (/api/users and /api/users/roles)
+ * 2. public.profiles
+ * 3. public.users
+ * 4. public.orders (extracts registered customer buyers and aggregates revenue metrics)
+ * 5. public.messages (extracts active chat customers)
+ * 6. localStorage cache
  * Automatically merges, deduplicates, calculates buyer analytics, and backfills missing records.
  */
 export async function getAllUsers(): Promise<UserProfile[]> {
+  // Sync server role overrides in background/foreground
+  await fetchServerRoleOverrides().catch(() => {});
+
   const local = getLocalUsers();
   const userMap = new Map<string, UserProfile>();
 
   // Populate map with local users first
   local.forEach(u => {
-    if (u && u.id) userMap.set(u.id, u);
+    if (u && u.id) {
+      const assigned = getAssignedRole(u.id, u.email);
+      userMap.set(u.id, { ...u, role: assigned || u.role || 'customer' });
+    }
   });
 
+  // 1. Fetch from Server backend (/api/users)
+  try {
+    const res = await fetch('/api/users');
+    if (res.ok) {
+      const serverUsers: UserProfile[] = await res.json();
+      if (Array.isArray(serverUsers)) {
+        serverUsers.forEach(su => {
+          if (su && su.id) {
+            const assigned = getAssignedRole(su.id, su.email);
+            const resolvedRole = assigned || su.role || 'customer';
+            const existing = userMap.get(su.id);
+            userMap.set(su.id, { ...existing, ...su, role: resolvedRole });
+          }
+        });
+      }
+    }
+  } catch (e) {
+    // Server fetch notice
+  }
+
   if (!isSupabaseEnabled()) {
-    return Array.from(userMap.values());
+    const all = Array.from(userMap.values()).map(u => {
+      const assigned = getAssignedRole(u.id, u.email);
+      return { ...u, role: assigned || u.role || 'customer' };
+    });
+    saveLocalUsers(all);
+    return all.sort((a, b) => {
+      if (a.role === 'admin' && b.role !== 'admin') return -1;
+      if (b.role === 'admin' && a.role !== 'admin') return 1;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
   }
 
   const supabase = getSupabase();
-  if (!supabase) return Array.from(userMap.values());
+  if (!supabase) {
+    const all = Array.from(userMap.values()).map(u => {
+      const assigned = getAssignedRole(u.id, u.email);
+      return { ...u, role: assigned || u.role || 'customer' };
+    });
+    saveLocalUsers(all);
+    return all.sort((a, b) => {
+      if (a.role === 'admin' && b.role !== 'admin') return -1;
+      if (b.role === 'admin' && a.role !== 'admin') return 1;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+  }
 
   try {
-    // 1. Fetch from public.profiles
+    // 2. Fetch from public.profiles in Supabase
     try {
       const { data: profileRows, error: pErr } = await supabase
         .from(PROFILES_TABLE)
@@ -510,14 +631,17 @@ export async function getAllUsers(): Promise<UserProfile[]> {
       if (!pErr && Array.isArray(profileRows)) {
         profileRows.forEach(row => {
           const norm = normalizeUserProfileRow(row);
-          if (norm) userMap.set(norm.id, norm);
+          if (norm) {
+            const existing = userMap.get(norm.id);
+            userMap.set(norm.id, { ...existing, ...norm });
+          }
         });
       }
     } catch (e) {
       console.warn('[userService] profiles fetch notice:', e);
     }
 
-    // 2. Fetch from public.users
+    // 3. Fetch from public.users in Supabase
     try {
       const { data: userRows, error: uErr } = await supabase
         .from(USERS_TABLE)
@@ -527,7 +651,6 @@ export async function getAllUsers(): Promise<UserProfile[]> {
         userRows.forEach(row => {
           const norm = normalizeUserProfileRow(row);
           if (norm) {
-            // Merge with existing profile or set
             const existing = userMap.get(norm.id);
             userMap.set(norm.id, { ...existing, ...norm });
           }
@@ -537,7 +660,7 @@ export async function getAllUsers(): Promise<UserProfile[]> {
       console.warn('[userService] users fetch notice:', e);
     }
 
-    // 3. Scan public.orders to discover any registered buyers who placed orders & calculate true spend
+    // 4. Scan public.orders to discover any registered buyers who placed orders & calculate true spend
     try {
       const { data: orderRows } = await supabase
         .from('orders')
@@ -574,12 +697,13 @@ export async function getAllUsers(): Promise<UserProfile[]> {
             });
           } else if (stats.email) {
             // Discovered a new buyer from an order!
+            const assigned = getAssignedRole(uId, stats.email);
             const newDiscoveredUser: UserProfile = {
               id: uId,
               email: stats.email,
               displayName: stats.name || stats.email.split('@')[0],
               companyName: 'Wholesale Buyer (Verified via Orders)',
-              role: 'customer',
+              role: assigned || 'customer',
               phone: '',
               photoURL: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
               avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
@@ -596,7 +720,15 @@ export async function getAllUsers(): Promise<UserProfile[]> {
       // Ignore orders lookup notice
     }
 
-    const allMerged = Array.from(userMap.values());
+    // Final normalization: ensure all user roles match assigned overrides
+    const allMerged = Array.from(userMap.values()).map(u => {
+      const assigned = getAssignedRole(u.id, u.email);
+      return {
+        ...u,
+        role: assigned || u.role || 'customer'
+      };
+    });
+
     // Save reconciled list into local storage cache
     saveLocalUsers(allMerged);
 
@@ -608,7 +740,11 @@ export async function getAllUsers(): Promise<UserProfile[]> {
     });
 
   } catch (error) {
-    return Array.from(userMap.values());
+    const fallbackList = Array.from(userMap.values()).map(u => {
+      const assigned = getAssignedRole(u.id, u.email);
+      return { ...u, role: assigned || u.role || 'customer' };
+    });
+    return fallbackList;
   }
 }
 

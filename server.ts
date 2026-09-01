@@ -30,6 +30,7 @@ const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const BROADCASTS_FILE = path.join(DATA_DIR, 'broadcasts.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const ROLE_OVERRIDES_FILE = path.join(DATA_DIR, 'role_overrides.json');
 
 // Generic JSON read/write helper
 function readJsonFile<T>(filePath: string, fallback: T): T {
@@ -1053,10 +1054,149 @@ app.post('/api/broadcasts', (req: Request, res: Response) => {
   }
 });
 
-// USERS & PROFILES CRUD
+// USERS & PROFILES CRUD & ROLE MANAGEMENT
+const ROOT_ADMIN_EMAIL = 'joshuaegesienyinnaya@gmail.com';
+
+function getRoleOverridesMap(): Record<string, 'admin' | 'customer'> {
+  return readJsonFile<Record<string, 'admin' | 'customer'>>(ROLE_OVERRIDES_FILE, {});
+}
+
+function resolveEffectiveRole(userId?: string, email?: string, defaultRole?: string): 'admin' | 'customer' {
+  if (email && email.trim().toLowerCase() === ROOT_ADMIN_EMAIL.toLowerCase()) {
+    return 'admin';
+  }
+  const overrides = getRoleOverridesMap();
+  if (userId && overrides[userId]) return overrides[userId];
+  if (userId && overrides[userId.toLowerCase()]) return overrides[userId.toLowerCase()];
+  if (email && overrides[email.trim().toLowerCase()]) return overrides[email.trim().toLowerCase()];
+  if (email && overrides[email.trim()]) return overrides[email.trim()];
+  return (defaultRole === 'admin' ? 'admin' : 'customer');
+}
+
+// Get global server-side role overrides
+app.get('/api/users/roles', (_req: Request, res: Response) => {
+  const overrides = getRoleOverridesMap();
+  res.json({ overrides });
+});
+
+// Update User Role Endpoint (Authoritative Server Store & Real-time SSE Broadcast)
+app.post(['/api/users/role', '/api/users/set-role'], (req: Request, res: Response) => {
+  try {
+    const { userId, role, email, actorName, reason } = req.body;
+    if (!userId && !email) {
+      res.status(400).json({ error: 'userId or email is required to update user role' });
+      return;
+    }
+
+    const targetRole: 'admin' | 'customer' = role === 'admin' ? 'admin' : 'customer';
+    const now = new Date().toISOString();
+
+    // 1. Update persistent role overrides map
+    const overrides = getRoleOverridesMap();
+    if (userId) {
+      overrides[userId] = targetRole;
+      overrides[userId.toLowerCase()] = targetRole;
+    }
+    if (email) {
+      overrides[email.trim().toLowerCase()] = targetRole;
+      overrides[email.trim()] = targetRole;
+    }
+    writeJsonFile(ROLE_OVERRIDES_FILE, overrides);
+
+    // 2. Update user in users.json if present
+    const users = readJsonFile<UserProfile[]>(USERS_FILE, []);
+    let userFound = false;
+    const updatedUsers = users.map(u => {
+      const matchId = userId && (u.id === userId || u.id.toLowerCase() === userId.toLowerCase());
+      const matchEmail = email && u.email && u.email.trim().toLowerCase() === email.trim().toLowerCase();
+      if (matchId || matchEmail) {
+        userFound = true;
+        return {
+          ...u,
+          role: targetRole,
+          updatedAt: now
+        };
+      }
+      return u;
+    });
+
+    if (!userFound && userId) {
+      // Create new profile record if missing
+      const newProfile: UserProfile = {
+        id: userId,
+        email: email || '',
+        displayName: email ? email.split('@')[0] : (targetRole === 'admin' ? 'Administrator' : 'Wholesale Buyer'),
+        companyName: targetRole === 'admin' ? 'Eagle Excel Headquarters' : 'Enterprise Buyer',
+        role: targetRole,
+        photoURL: targetRole === 'admin'
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'
+          : 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
+        avatarUrl: targetRole === 'admin'
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80'
+          : 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
+        createdAt: now,
+        updatedAt: now,
+        totalSpent: 0,
+        ordersCount: 0
+      };
+      updatedUsers.unshift(newProfile);
+    }
+    writeJsonFile(USERS_FILE, updatedUsers);
+
+    // 3. Broadcast real-time SSE event to ALL connected clients (Mobile, Desktop, Tablet)
+    const roleEventPayload = {
+      userId,
+      email,
+      role: targetRole,
+      actorName: actorName || 'System Administrator',
+      reason: reason || '',
+      timestamp: Date.now()
+    };
+
+    broadcastMessageSseEvent('user_role_changed', roleEventPayload);
+    broadcastProductSseEvent('user_role_changed', roleEventPayload);
+    broadcastMessageSseEvent('user_updated', { userId, role: targetRole });
+
+    res.json({
+      success: true,
+      userId,
+      email,
+      role: targetRole,
+      message: `User role successfully updated to "${targetRole}". Broadcasted to all connected devices.`,
+      updatedAt: now
+    });
+  } catch (err: any) {
+    console.error('Error updating user role on server:', err);
+    res.status(500).json({ error: err.message || 'Failed to update user role' });
+  }
+});
+
 app.get('/api/users', (_req: Request, res: Response) => {
   const users = readJsonFile<UserProfile[]>(USERS_FILE, []);
-  res.json(users);
+  const normalized = users.map(u => ({
+    ...u,
+    role: resolveEffectiveRole(u.id, u.email, u.role)
+  }));
+  res.json(normalized);
+});
+
+app.get('/api/users/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const users = readJsonFile<UserProfile[]>(USERS_FILE, []);
+  const found = users.find(u => u.id === id || (u.email && u.email.toLowerCase() === id.toLowerCase()));
+  if (!found) {
+    // Check if there is a role override for this ID/email
+    const role = resolveEffectiveRole(id, id);
+    res.json({
+      id,
+      role,
+      displayName: 'User',
+      createdAt: new Date().toISOString()
+    });
+    return;
+  }
+  const effectiveRole = resolveEffectiveRole(found.id, found.email, found.role);
+  res.json({ ...found, role: effectiveRole });
 });
 
 app.post('/api/users', (req: Request, res: Response) => {
@@ -1065,10 +1205,12 @@ app.post('/api/users', (req: Request, res: Response) => {
     const body = req.body;
     const id = body.id;
     const now = new Date().toISOString();
+    const effectiveRole = resolveEffectiveRole(id, body.email, body.role);
 
     const profile: UserProfile = {
       ...body,
       id,
+      role: effectiveRole,
       updatedAt: now,
       createdAt: body.createdAt || now
     };
@@ -1076,6 +1218,7 @@ app.post('/api/users', (req: Request, res: Response) => {
     const updatedUsers = [...users.filter(u => u.id !== id), profile];
     writeJsonFile(USERS_FILE, updatedUsers);
 
+    broadcastMessageSseEvent('user_updated', { profile });
     res.json(profile);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to save user profile' });
