@@ -436,8 +436,6 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
       }
       setIsModalOpen(false);
       setEditingProduct(null);
-      // Asynchronously refresh in background without holding the modal/button
-      loadProducts().catch(() => {});
     } catch (err) {
       console.error('Error saving product to database:', err);
       showToast('Failed to save product to database.', 'error');
@@ -450,11 +448,12 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
   const confirmDeleteProduct = async () => {
     if (!deletingProduct) return;
     setIsDeleting(true);
+    const deleteId = deletingProduct.id;
     try {
-      await deleteProductFromDatabase(deletingProduct.id);
+      await deleteProductFromDatabase(deleteId);
+      setProducts(prev => prev.filter(p => p.id !== deleteId));
       showToast(`Product "${deletingProduct.name}" removed from catalog.`);
       setDeletingProduct(null);
-      loadProducts().catch(() => {});
     } catch (err) {
       console.error('Error deleting product from database:', err);
       showToast('Failed to delete product', 'error');
@@ -504,7 +503,11 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
 
         // Category filter
         if (selectedCategory !== 'all') {
-          if (product.category.toLowerCase() !== selectedCategory.toLowerCase()) {
+          const prodCat = (product.category || '').toLowerCase();
+          const selCat = selectedCategory.toLowerCase();
+          const matchedCategoryObj = categories.find(c => c.id.toLowerCase() === selCat || c.name.toLowerCase() === selCat);
+          const isCatMatch = prodCat === selCat || (matchedCategoryObj && (prodCat === matchedCategoryObj.id.toLowerCase() || prodCat === matchedCategoryObj.name.toLowerCase()));
+          if (!isCatMatch) {
             return false;
           }
         }

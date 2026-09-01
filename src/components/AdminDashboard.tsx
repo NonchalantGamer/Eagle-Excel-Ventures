@@ -560,7 +560,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       }
       setIsProductModalOpen(false);
       setEditingProduct(null);
-      loadData().catch(() => {});
     } catch (err) {
       console.error('Error saving product:', err);
       showToast('Failed to save product.', 'error');
@@ -710,11 +709,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const confirmDeleteProductAction = async () => {
     if (!productToDelete) return;
     setIsDeletingProduct(true);
+    const deleteId = productToDelete.id;
     try {
-      await deleteProductFromDatabase(productToDelete.id);
+      await deleteProductFromDatabase(deleteId);
+      setProducts(prev => prev.filter(p => p.id !== deleteId));
       showToast(`Removed product "${productToDelete.name}".`);
       setProductToDelete(null);
-      loadData().catch(() => {});
     } catch (err) {
       showToast('Failed to delete product.', 'error');
     } finally {

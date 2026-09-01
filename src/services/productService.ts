@@ -677,6 +677,7 @@ export async function createProductInDatabase(productData: Omit<Product, 'id' | 
   updateLocalProductsState(updatedList, true);
 
   // 2. Post to backend server API (persisted to server_data/products.json and broadcasted via SSE)
+  let serverProduct: Product | null = null;
   try {
     const res = await fetch('/api/products', {
       method: 'POST',
@@ -684,24 +685,52 @@ export async function createProductInDatabase(productData: Omit<Product, 'id' | 
       body: JSON.stringify(product)
     });
     if (res.ok) {
-      const serverProduct = await res.json();
-      return serverProduct || product;
+      serverProduct = await res.json();
     }
   } catch (err) {
     console.warn('Server API create product sync warning:', err);
   }
 
-  // 3. Fallback / Secondary write to Supabase if configured
+  // 3. Fallback / Secondary write to Supabase if configured (Always persist to Supabase)
   if (isSupabaseEnabled()) {
     const supabase = getSupabase();
     if (supabase) {
       try {
-        await supabase.from(PRODUCTS_TABLE).insert(product);
-      } catch {}
+        const payloadToSave = serverProduct || product;
+        await supabase.from(PRODUCTS_TABLE).upsert({
+          id: payloadToSave.id,
+          name: payloadToSave.name,
+          sku: payloadToSave.sku,
+          category: payloadToSave.category,
+          description: payloadToSave.description,
+          price: payloadToSave.price,
+          wholesale_tiers: payloadToSave.wholesaleTiers,
+          wholesaleTiers: payloadToSave.wholesaleTiers,
+          stock: payloadToSave.stock,
+          min_order_qty: payloadToSave.minOrderQty,
+          minOrderQty: payloadToSave.minOrderQty,
+          unit: payloadToSave.unit,
+          images: payloadToSave.images,
+          specs: payloadToSave.specs,
+          is_featured: payloadToSave.isFeatured,
+          isFeatured: payloadToSave.isFeatured,
+          rating: payloadToSave.rating,
+          reviews_count: payloadToSave.reviewsCount,
+          reviewsCount: payloadToSave.reviewsCount,
+          estimated_freight: payloadToSave.estimatedFreight,
+          estimatedFreight: payloadToSave.estimatedFreight,
+          created_at: payloadToSave.createdAt,
+          createdAt: payloadToSave.createdAt,
+          updated_at: payloadToSave.updatedAt,
+          updatedAt: payloadToSave.updatedAt
+        }, { onConflict: 'id' });
+      } catch (err) {
+        console.warn('Supabase product create sync warning:', err);
+      }
     }
   }
 
-  return product;
+  return serverProduct || product;
 }
 
 // Update existing product
@@ -767,6 +796,7 @@ export async function updateProductInDatabase(id: string, updates: Partial<Produ
   updateLocalProductsState(updatedList, true);
 
   // 2. Send to backend server API
+  let savedServerProduct: Product | null = null;
   try {
     const res = await fetch(`/api/products/${encodeURIComponent(id)}`, {
       method: 'PUT',
@@ -774,24 +804,50 @@ export async function updateProductInDatabase(id: string, updates: Partial<Produ
       body: JSON.stringify(mergedProduct)
     });
     if (res.ok) {
-      const saved = await res.json();
-      return saved || mergedProduct;
+      savedServerProduct = await res.json();
     }
   } catch (err) {
     console.warn('Server API update product sync warning:', err);
   }
 
-  // 3. Backup to Supabase
+  // 3. Backup to Supabase (Always persist to Supabase)
   if (isSupabaseEnabled()) {
     const supabase = getSupabase();
     if (supabase) {
       try {
-        await supabase.from(PRODUCTS_TABLE).upsert(mergedProduct, { onConflict: 'id' });
-      } catch {}
+        const payloadToSave = savedServerProduct || mergedProduct;
+        await supabase.from(PRODUCTS_TABLE).upsert({
+          id: payloadToSave.id,
+          name: payloadToSave.name,
+          sku: payloadToSave.sku,
+          category: payloadToSave.category,
+          description: payloadToSave.description,
+          price: payloadToSave.price,
+          wholesale_tiers: payloadToSave.wholesaleTiers,
+          wholesaleTiers: payloadToSave.wholesaleTiers,
+          stock: payloadToSave.stock,
+          min_order_qty: payloadToSave.minOrderQty,
+          minOrderQty: payloadToSave.minOrderQty,
+          unit: payloadToSave.unit,
+          images: payloadToSave.images,
+          specs: payloadToSave.specs,
+          is_featured: payloadToSave.isFeatured,
+          isFeatured: payloadToSave.isFeatured,
+          rating: payloadToSave.rating,
+          reviews_count: payloadToSave.reviewsCount,
+          reviewsCount: payloadToSave.reviewsCount,
+          estimated_freight: payloadToSave.estimatedFreight,
+          estimatedFreight: payloadToSave.estimatedFreight,
+          updated_at: payloadToSave.updatedAt,
+          updatedAt: payloadToSave.updatedAt
+        }, { onConflict: 'id' });
+      } catch (err) {
+        console.warn('Supabase product update sync warning:', err);
+      }
     }
   }
 
-  return mergedProduct;
+  return savedServerProduct || mergedProduct;
 }
 
 // Delete product
@@ -835,7 +891,9 @@ export async function deleteProductFromDatabase(id: string): Promise<void> {
     if (supabase) {
       try {
         await supabase.from(PRODUCTS_TABLE).delete().eq('id', id);
-      } catch {}
+      } catch (err) {
+        console.warn('Supabase product delete warning:', err);
+      }
     }
   }
 }
@@ -995,12 +1053,15 @@ function normalizeSupabaseProductRow(row: any): Product | null {
 
   const basePrice = Number(row.price) || 0;
   const minOrderQty = Number(row.minOrderQty || row.min_order_qty || row.moq) || 1;
+  const estFreight = row.estimatedFreight !== undefined 
+    ? Number(row.estimatedFreight) 
+    : (row.estimated_freight !== undefined ? Number(row.estimated_freight) : undefined);
 
   return {
     id,
     name: String(row.name || 'Untitled Wholesale Product'),
     sku: String(row.sku || `SKU-${id.slice(0, 8).toUpperCase()}`),
-    category: String(row.category || 'all').toLowerCase(),
+    category: String(row.category || 'all'),
     description: String(row.description || ''),
     price: basePrice,
     wholesaleTiers: wholesaleTiers.length > 0 ? wholesaleTiers : [
@@ -1012,9 +1073,10 @@ function normalizeSupabaseProductRow(row: any): Product | null {
     images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80'],
     responsiveImages: Array.isArray(responsiveImages) ? responsiveImages : undefined,
     specs,
-    isFeatured: row.isFeatured !== undefined ? Boolean(row.isFeatured) : Boolean(row.featured),
+    isFeatured: row.isFeatured !== undefined ? Boolean(row.isFeatured) : Boolean(row.is_featured ?? row.featured),
     rating: Number(row.rating) || 4.9,
     reviewsCount: Number(row.reviewsCount || row.reviews_count) || 12,
+    estimatedFreight: estFreight,
     createdAt: row.createdAt || row.created_at || new Date().toISOString(),
     updatedAt: row.updatedAt || row.updated_at || new Date().toISOString()
   };

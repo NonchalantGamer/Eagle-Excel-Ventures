@@ -1,5 +1,25 @@
 [
   {
+    "name": "Test Solar Panel Pro",
+    "sku": "TEST-101",
+    "price": 99,
+    "stock": 50,
+    "category": "solar",
+    "description": "Test solar",
+    "wholesaleTiers": [],
+    "specs": {},
+    "unit": "Box",
+    "id": "prod_1788261865862_qna1d",
+    "createdAt": "2026-09-01T11:24:25.862Z",
+    "updatedAt": "2026-09-01T11:24:25.862Z",
+    "rating": 5,
+    "reviewsCount": 0,
+    "isFeatured": false,
+    "images": [
+      "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=80"
+    ]
+  },
+  {
     "id": "prod_ee_01",
     "name": "ApexPro Active Noise-Cancelling Wireless Headsets (Bulk Master Carton)",
     "sku": "EE-AUD-902",
