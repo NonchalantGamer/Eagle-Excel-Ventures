@@ -683,6 +683,49 @@ export async function sendSupportReplyNotification(
 }
 
 /**
+ * Dispatch notification when a user is promoted to Administrator
+ */
+export async function sendAdminRoleGrantedNotification(
+  targetUserId: string,
+  targetUserName?: string,
+  grantedByName?: string
+): Promise<AppNotification> {
+  playNotificationSound();
+  return sendAppNotification({
+    userId: targetUserId,
+    recipientRole: 'admin',
+    type: 'system',
+    title: '🛡️ Administrator Permissions Granted',
+    message: `Congratulations${targetUserName ? ` ${targetUserName}` : ''}! Your account has been upgraded to Administrator${grantedByName ? ` by ${grantedByName}` : ' by Eagle Excel Operations'}. You now have full access to backend operations, catalog management, inventory control, and customer orders.`,
+    targetView: 'admin',
+    isImportant: true,
+    importance: 'critical',
+    priority: 'urgent'
+  });
+}
+
+/**
+ * Dispatch notification when an administrator role is reverted to Wholesale Buyer
+ */
+export async function sendAdminRoleRevokedNotification(
+  targetUserId: string,
+  targetUserName?: string,
+  revokedByName?: string
+): Promise<AppNotification> {
+  return sendAppNotification({
+    userId: targetUserId,
+    recipientRole: 'customer',
+    type: 'system',
+    title: '🏢 Account Role Updated to Buyer',
+    message: `Your account role has been updated to Wholesale Buyer${revokedByName ? ` by ${revokedByName}` : ''}. Your view is now configured for wholesale orders, pro-forma invoicing, and quotations.`,
+    targetView: 'orders',
+    isImportant: true,
+    importance: 'normal',
+    priority: 'normal'
+  });
+}
+
+/**
  * Profile updated events are handled directly in UI forms, not spamming persistent inbox
  */
 export async function sendProfileUpdatedNotification(userId: string): Promise<AppNotification> {

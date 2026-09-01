@@ -110,6 +110,7 @@ import { StaffGuidanceBanner } from './admin/StaffGuidanceBanner';
 import { AdminUniversalSearch } from './admin/AdminUniversalSearch';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { UserManagementView } from './admin/UserManagementView';
+import { AdminRoleSwitchAuthModal } from './admin/AdminRoleSwitchAuthModal';
 import { AdminQuickActionDeck } from './admin/AdminQuickActionDeck';
 import { AdminAuditLog } from './admin/AdminAuditLog';
 import { useModalFocusLock } from '../hooks/useModalFocusLock';
@@ -653,16 +654,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     setUserToToggleRole(targetUser);
   };
 
-  const confirmToggleUserRole = async () => {
-    if (!userToToggleRole) return;
-    const newRole: UserRole = userToToggleRole.role === 'admin' ? 'customer' : 'admin';
+  const confirmToggleUserRole = async (targetUser: UserProfile, newRole: UserRole) => {
     try {
-      await updateUserRole(userToToggleRole.id, newRole, userToToggleRole.email);
-      showToast(`Updated ${userToToggleRole.displayName || userToToggleRole.email}'s role to ${newRole === 'admin' ? 'Administrator' : 'Wholesale Buyer'}. Role is permanently active.`);
+      const adminActorName = currentUser?.displayName || userProfile?.displayName || currentUser?.email || 'Administrator';
+      await updateUserRole(targetUser.id, newRole, targetUser.email, adminActorName);
+      showToast(`Updated ${targetUser.displayName || targetUser.email}'s role to ${newRole === 'admin' ? 'Administrator' : 'Wholesale Buyer'}. Notification has been dispatched.`);
       setUserToToggleRole(null);
       await loadData();
     } catch (err: any) {
       showToast(err?.message || 'Failed to update user role.', 'error');
+      throw err;
     }
   };
 
@@ -2617,24 +2618,13 @@ VITE_SUPABASE_ANON_KEY=your-supabase-anon-key`}
         />
       )}
 
-      {/* CONFIRM USER ROLE TOGGLE DIALOG */}
-      {userToToggleRole && (
-        <ConfirmDialog
-          isOpen={!!userToToggleRole}
-          onClose={() => setUserToToggleRole(null)}
-          onConfirm={confirmToggleUserRole}
-          title="Change Administrator Permissions?"
-          message={
-            <span>
-              Are you sure you want to change <strong>{userToToggleRole.displayName}</strong>'s role to <strong>{(userToToggleRole.role === 'admin' ? 'Customer' : 'Admin').toUpperCase()}</strong>?
-            </span>
-          }
-          confirmText="Confirm Permission Change"
-          cancelText="Cancel"
-          variant="warning"
-          icon="alert"
-        />
-      )}
+      {/* PASSWORD-PROTECTED USER ROLE SWITCH MODAL */}
+      <AdminRoleSwitchAuthModal
+        isOpen={!!userToToggleRole}
+        targetUser={userToToggleRole}
+        onClose={() => setUserToToggleRole(null)}
+        onConfirmRoleSwitch={confirmToggleUserRole}
+      />
 
       {/* CONFIRM SEED CATALOG DIALOG */}
       <ConfirmDialog

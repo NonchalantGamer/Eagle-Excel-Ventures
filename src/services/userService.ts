@@ -1,5 +1,6 @@
 import { getSupabase, isSupabaseEnabled, OperationType, handleSupabaseError } from '../lib/supabase';
 import { UserProfile, UserRole, UserAddress } from '../types';
+import { sendAdminRoleGrantedNotification, sendAdminRoleRevokedNotification } from './notificationService';
 
 const PROFILES_TABLE = 'profiles';
 const USERS_TABLE = 'users';
@@ -138,7 +139,8 @@ export function normalizeUserProfileRow(d: any): UserProfile | null {
 export async function assignAdminClaim(
   targetUid: string, 
   isAdmin: boolean = true,
-  targetEmail?: string
+  targetEmail?: string,
+  actorName?: string
 ): Promise<{ success: boolean; role: UserRole; message: string }> {
   if (!targetUid) {
     throw new Error('Target user ID is required to assign admin claims.');
@@ -181,7 +183,17 @@ export async function assignAdminClaim(
     }
   } catch {}
 
-  // 4. Dispatch local cross-tab / window sync events
+  // 4. Dispatch notification to the target user
+  try {
+    const targetDisplayName = matchedUser?.displayName || (resolvedEmail ? resolvedEmail.split('@')[0] : 'User');
+    if (isAdmin) {
+      sendAdminRoleGrantedNotification(targetUid, targetDisplayName, actorName).catch(() => {});
+    } else {
+      sendAdminRoleRevokedNotification(targetUid, targetDisplayName, actorName).catch(() => {});
+    }
+  } catch {}
+
+  // 5. Dispatch local cross-tab / window sync events
   try {
     window.dispatchEvent(new CustomEvent('eagle_excel_user_role_changed', {
       detail: { userId: targetUid, email: resolvedEmail, role: targetRole }
@@ -601,8 +613,8 @@ export async function getAllUsers(): Promise<UserProfile[]> {
 }
 
 // Update User Role (Admin permission)
-export async function updateUserRole(userId: string, newRole: UserRole, userEmail?: string): Promise<void> {
-  await assignAdminClaim(userId, newRole === 'admin', userEmail);
+export async function updateUserRole(userId: string, newRole: UserRole, userEmail?: string, actorName?: string): Promise<void> {
+  await assignAdminClaim(userId, newRole === 'admin', userEmail, actorName);
 }
 
 /**
