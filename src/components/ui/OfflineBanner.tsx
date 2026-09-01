@@ -10,7 +10,7 @@ export const OfflineBanner: React.FC = () => {
   return (
     <aside
       aria-label="Network Connection Status"
-      className={`fixed bottom-4 left-4 z-40 max-w-md rounded-2xl p-3.5 shadow-2xl transition-all duration-300 backdrop-blur-md border ${
+      className={`fixed bottom-20 left-4 sm:bottom-6 sm:left-24 z-40 max-w-md w-[calc(100vw-2rem)] sm:w-auto rounded-2xl p-3.5 shadow-2xl transition-all duration-300 backdrop-blur-md border ${
         isOffline
           ? 'bg-amber-950/90 dark:bg-amber-950/95 border-amber-500/30 text-amber-200 shadow-amber-950/40'
           : 'bg-emerald-950/90 dark:bg-emerald-950/95 border-emerald-500/30 text-emerald-200 shadow-emerald-950/40'

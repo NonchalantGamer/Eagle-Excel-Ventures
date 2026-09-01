@@ -9,39 +9,38 @@ function getHorizontalScrollContainer(target: HTMLElement | null): HTMLElement |
 
   while (curr && curr !== document.body && curr !== document.documentElement) {
     const tagName = curr.tagName.toLowerCase();
-    // Do not intercept text areas or standard text inputs
+    // Do not intercept text inputs or textareas
     if (tagName === 'textarea' || (tagName === 'input' && (curr as HTMLInputElement).type === 'text')) {
       return null;
     }
 
-    // Check if the element has horizontal overflow
-    const hasHorizontalOverflow = curr.scrollWidth > curr.clientWidth + 1;
+    // Check computed styles and classes
+    const style = window.getComputedStyle(curr);
+    const overflowX = style.overflowX;
+    const isDeclaredHorizontal =
+      overflowX === 'auto' ||
+      overflowX === 'scroll' ||
+      overflowX === 'overlay' ||
+      curr.classList.contains('overflow-x-auto') ||
+      curr.classList.contains('overflow-x-scroll');
 
-    if (hasHorizontalOverflow) {
-      const style = window.getComputedStyle(curr);
-      const overflowX = style.overflowX;
-
-      if (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay') {
-        const hasVerticalOverflow = curr.scrollHeight > curr.clientHeight + 1;
-        const overflowY = style.overflowY;
-        const isVerticallyScrollable =
-          hasVerticalOverflow && (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay');
-
-        // If the container is strictly horizontal (no vertical scroll)
-        if (!isVerticallyScrollable) {
-          return curr;
-        }
-
-        // If the container has both, treat as horizontal if horizontal ratio exceeds vertical
-        const hRatio = curr.scrollWidth / curr.clientWidth;
-        const vRatio = curr.scrollHeight / curr.clientHeight;
-        if (hRatio >= vRatio) {
-          return curr;
-        }
+    if (isDeclaredHorizontal) {
+      // Check if the container has horizontal overflow to scroll
+      const hasHorizontalOverflow = curr.scrollWidth > curr.clientWidth + 1;
+      if (hasHorizontalOverflow) {
+        return curr;
       }
     }
 
     curr = curr.parentElement;
+  }
+
+  // Fallback: check closest element with horizontal overflow class
+  if (target && typeof target.closest === 'function') {
+    const closestHorizontal = target.closest('.overflow-x-auto, .overflow-x-scroll') as HTMLElement | null;
+    if (closestHorizontal && closestHorizontal.scrollWidth > closestHorizontal.clientWidth + 1) {
+      return closestHorizontal;
+    }
   }
 
   return null;
@@ -50,8 +49,8 @@ function getHorizontalScrollContainer(target: HTMLElement | null): HTMLElement |
 /**
  * Global hook to enforce strict scroll isolation:
  * - As long as the mouse is over a horizontal list, ONLY horizontal scroll is possible
- *   (vertical page scrolling is completely locked and wheel motion is converted to horizontal).
- * - When the mouse is outside horizontal lists, standard vertical scrolling proceeds normally.
+ *   (vertical page scrolling is completely locked and wheel motion is converted strictly to horizontal).
+ * - When the mouse is placed outside horizontal lists, standard vertical scrolling proceeds normally.
  */
 export function useHorizontalWheelScroll() {
   useEffect(() => {
@@ -73,6 +72,7 @@ export function useHorizontalWheelScroll() {
       // Cursor IS over a horizontal list:
       // STRICT RULE: Lock out vertical scroll completely while mouse is placed on the horizontal list
       e.preventDefault();
+      e.stopPropagation();
 
       // Determine delta (from vertical wheel deltaY, shift+wheel, or horizontal trackpad deltaX)
       let delta = 0;
@@ -97,10 +97,10 @@ export function useHorizontalWheelScroll() {
       container.scrollLeft += delta;
     };
 
-    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('wheel', handleWheel, { passive: false, capture: true });
 
     return () => {
-      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('wheel', handleWheel, { capture: true });
     };
   }, []);
 }

@@ -964,7 +964,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto bg-slate-100 dark:bg-[#121212] p-1.5 rounded-2xl border border-slate-200 dark:border-white/5 text-xs font-semibold scrollbar-none">
+      <div className="flex items-center gap-1.5 overflow-x-auto bg-slate-100 dark:bg-[#121212] p-1.5 pb-2.5 mb-2 rounded-2xl border border-slate-200 dark:border-white/5 text-xs font-semibold">
         <button
           onClick={() => setActiveTab('overview')}
           className={`py-2 px-3.5 rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap btn-hover ${

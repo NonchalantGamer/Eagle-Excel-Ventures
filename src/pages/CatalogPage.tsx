@@ -486,7 +486,7 @@ export const CatalogPage: React.FC<CatalogPageProps> = ({
       )}
 
       {/* Quick Category Chips Strip */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex items-center gap-2.5 overflow-x-auto pb-3.5 pt-1 mb-2">
         {availableCategories.map(cat => {
           const isSelected = selectedCategory === cat.id;
           const Icon = getCategoryIcon(cat.id);

@@ -403,7 +403,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
           {/* Thumbnail Gallery Strip */}
           {product.images && product.images.length > 1 && (
-            <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-thin">
+            <div className="flex items-center gap-3 overflow-x-auto pb-3 mb-2 scrollbar-thin">
               {product.images.map((imgUrl, idx) => (
                 <button
                   key={idx}
@@ -721,7 +721,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       <div id="product-detail-tabs-section" className="pt-6 space-y-6 reveal-on-scroll stagger-3">
         
         {/* Navigation Tabs Bar */}
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 overflow-x-auto pb-2 mb-2">
           <button
             type="button"
             onClick={() => setActiveTab('overview')}

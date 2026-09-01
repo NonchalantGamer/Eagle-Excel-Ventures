@@ -820,7 +820,7 @@ export const ManageProductsPage: React.FC<ManageProductsPageProps> = ({
         </div>
 
         {/* Category Fast Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2.5 pt-0.5 mb-1 text-xs">
           <button
             onClick={() => setSelectedCategory('all')}
             className={`px-3 py-1 rounded-xl font-bold transition-all shrink-0 cursor-pointer whitespace-nowrap ${

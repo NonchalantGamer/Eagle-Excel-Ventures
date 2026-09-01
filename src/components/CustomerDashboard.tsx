@@ -442,7 +442,7 @@ export const CustomerDashboard: React.FC = () => {
       <div className="bg-white dark:bg-[#161616] rounded-2xl p-4 border border-slate-200 dark:border-white/5 shadow-sm space-y-3">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           {/* Status Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 text-xs no-scrollbar">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2.5 pt-0.5 text-xs">
             {[
               { id: 'all', label: 'All Orders' },
               { id: 'paid', label: 'Paid / Confirmed' },
