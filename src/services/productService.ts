@@ -581,9 +581,11 @@ export async function getProductsFromDatabase(): Promise<Product[]> {
     });
     if (response.ok) {
       const serverProducts: Product[] = await response.json();
-      if (Array.isArray(serverProducts)) {
-        updateLocalProductsState(serverProducts);
-        return serverProducts;
+      if (Array.isArray(serverProducts) && serverProducts.length > 0) {
+        const deletedIds = getDeletedProductIds();
+        const validProducts = serverProducts.filter(p => !deletedIds.has(p.id));
+        updateLocalProductsState(validProducts);
+        return validProducts;
       }
     }
   } catch (err) {
@@ -600,9 +602,15 @@ export async function getProductsFromDatabase(): Promise<Product[]> {
           .select('*')
           .order('createdAt', { ascending: false });
         
-        if (data && !error && Array.isArray(data)) {
-          updateLocalProductsState(data as Product[]);
-          return data as Product[];
+        if (data && !error && Array.isArray(data) && data.length > 0) {
+          const deletedIds = getDeletedProductIds();
+          const normalized = data
+            .map(normalizeSupabaseProductRow)
+            .filter((p): p is Product => p !== null && !deletedIds.has(p.id));
+          if (normalized.length > 0) {
+            updateLocalProductsState(normalized);
+            return normalized;
+          }
         }
       } catch (error) {
         handleSupabaseError(error, OperationType.READ, PRODUCTS_TABLE);
@@ -633,6 +641,36 @@ export async function getProductById(id: string): Promise<Product | null> {
   } catch {}
 
   return found || null;
+}
+
+// Helper to map Product to Supabase table schema without invalid column errors
+export function mapProductToSupabaseRow(product: Product): Record<string, any> {
+  const specs: Record<string, string> = { ...(product.specs || {}) };
+  if (product.estimatedFreight !== undefined && product.estimatedFreight !== null) {
+    specs.estimatedFreight = String(product.estimatedFreight);
+  }
+
+  return {
+    id: product.id,
+    name: product.name,
+    sku: product.sku,
+    category: product.category,
+    description: product.description,
+    price: Number(product.price) || 0,
+    wholesaleTiers: Array.isArray(product.wholesaleTiers) ? product.wholesaleTiers : [],
+    stock: Number(product.stock) || 0,
+    minOrderQty: Number(product.minOrderQty) || 1,
+    unit: product.unit || 'units',
+    images: Array.isArray(product.images) && product.images.length > 0
+      ? product.images
+      : ['https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=80'],
+    specs,
+    isFeatured: Boolean(product.isFeatured),
+    rating: Number(product.rating) || 4.9,
+    reviewsCount: Number(product.reviewsCount) || 0,
+    createdAt: product.createdAt || new Date().toISOString(),
+    updatedAt: product.updatedAt || new Date().toISOString()
+  };
 }
 
 // Add or Create a product (Instantly synced to server and all connected customer devices)
@@ -697,33 +735,11 @@ export async function createProductInDatabase(productData: Omit<Product, 'id' | 
     if (supabase) {
       try {
         const payloadToSave = serverProduct || product;
-        await supabase.from(PRODUCTS_TABLE).upsert({
-          id: payloadToSave.id,
-          name: payloadToSave.name,
-          sku: payloadToSave.sku,
-          category: payloadToSave.category,
-          description: payloadToSave.description,
-          price: payloadToSave.price,
-          wholesale_tiers: payloadToSave.wholesaleTiers,
-          wholesaleTiers: payloadToSave.wholesaleTiers,
-          stock: payloadToSave.stock,
-          min_order_qty: payloadToSave.minOrderQty,
-          minOrderQty: payloadToSave.minOrderQty,
-          unit: payloadToSave.unit,
-          images: payloadToSave.images,
-          specs: payloadToSave.specs,
-          is_featured: payloadToSave.isFeatured,
-          isFeatured: payloadToSave.isFeatured,
-          rating: payloadToSave.rating,
-          reviews_count: payloadToSave.reviewsCount,
-          reviewsCount: payloadToSave.reviewsCount,
-          estimated_freight: payloadToSave.estimatedFreight,
-          estimatedFreight: payloadToSave.estimatedFreight,
-          created_at: payloadToSave.createdAt,
-          createdAt: payloadToSave.createdAt,
-          updated_at: payloadToSave.updatedAt,
-          updatedAt: payloadToSave.updatedAt
-        }, { onConflict: 'id' });
+        const supabasePayload = mapProductToSupabaseRow(payloadToSave);
+        const { error: upsertErr } = await supabase.from(PRODUCTS_TABLE).upsert(supabasePayload, { onConflict: 'id' });
+        if (upsertErr) {
+          console.warn('Supabase product create error:', upsertErr);
+        }
       } catch (err) {
         console.warn('Supabase product create sync warning:', err);
       }
@@ -816,31 +832,11 @@ export async function updateProductInDatabase(id: string, updates: Partial<Produ
     if (supabase) {
       try {
         const payloadToSave = savedServerProduct || mergedProduct;
-        await supabase.from(PRODUCTS_TABLE).upsert({
-          id: payloadToSave.id,
-          name: payloadToSave.name,
-          sku: payloadToSave.sku,
-          category: payloadToSave.category,
-          description: payloadToSave.description,
-          price: payloadToSave.price,
-          wholesale_tiers: payloadToSave.wholesaleTiers,
-          wholesaleTiers: payloadToSave.wholesaleTiers,
-          stock: payloadToSave.stock,
-          min_order_qty: payloadToSave.minOrderQty,
-          minOrderQty: payloadToSave.minOrderQty,
-          unit: payloadToSave.unit,
-          images: payloadToSave.images,
-          specs: payloadToSave.specs,
-          is_featured: payloadToSave.isFeatured,
-          isFeatured: payloadToSave.isFeatured,
-          rating: payloadToSave.rating,
-          reviews_count: payloadToSave.reviewsCount,
-          reviewsCount: payloadToSave.reviewsCount,
-          estimated_freight: payloadToSave.estimatedFreight,
-          estimatedFreight: payloadToSave.estimatedFreight,
-          updated_at: payloadToSave.updatedAt,
-          updatedAt: payloadToSave.updatedAt
-        }, { onConflict: 'id' });
+        const supabasePayload = mapProductToSupabaseRow(payloadToSave);
+        const { error: upsertErr } = await supabase.from(PRODUCTS_TABLE).upsert(supabasePayload, { onConflict: 'id' });
+        if (upsertErr) {
+          console.warn('Supabase product update error:', upsertErr);
+        }
       } catch (err) {
         console.warn('Supabase product update sync warning:', err);
       }
@@ -923,7 +919,8 @@ export async function seedCatalogToDatabase(): Promise<number> {
     const supabase = getSupabase();
     if (supabase) {
       try {
-        await supabase.from(PRODUCTS_TABLE).upsert(INITIAL_PRODUCTS, { onConflict: 'id' });
+        const rows = INITIAL_PRODUCTS.map(mapProductToSupabaseRow);
+        await supabase.from(PRODUCTS_TABLE).upsert(rows, { onConflict: 'id' });
       } catch {}
     }
   }
@@ -1055,7 +1052,11 @@ function normalizeSupabaseProductRow(row: any): Product | null {
   const minOrderQty = Number(row.minOrderQty || row.min_order_qty || row.moq) || 1;
   const estFreight = row.estimatedFreight !== undefined 
     ? Number(row.estimatedFreight) 
-    : (row.estimated_freight !== undefined ? Number(row.estimated_freight) : undefined);
+    : (row.estimated_freight !== undefined 
+        ? Number(row.estimated_freight) 
+        : (specs && typeof specs === 'object' && specs.estimatedFreight !== undefined 
+            ? Number(specs.estimatedFreight) 
+            : undefined));
 
   return {
     id,
@@ -1135,9 +1136,6 @@ function startSharedProductSync() {
                   }
                 }
               }
-              getProductsFromDatabase().then(prods => {
-                updateLocalProductsState(prods, true);
-              }).catch(() => {});
             }
           )
           .on(
@@ -1158,9 +1156,6 @@ function startSharedProductSync() {
                   }
                 }
               }
-              getProductsFromDatabase().then(prods => {
-                updateLocalProductsState(prods, true);
-              }).catch(() => {});
             }
           )
           .on(
@@ -1174,9 +1169,6 @@ function startSharedProductSync() {
                 const updated = current.filter(p => p.id !== deletedId);
                 updateLocalProductsState(updated, true);
               }
-              getProductsFromDatabase().then(prods => {
-                updateLocalProductsState(prods, true);
-              }).catch(() => {});
             }
           )
           .subscribe((status: string) => {

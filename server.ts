@@ -2,11 +2,26 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { INITIAL_PRODUCTS, INITIAL_CATEGORIES } from './src/data/seedData';
 import { Product, Category, Order, Message, BroadcastCampaign, UserProfile } from './src/types';
 
 const app = express();
 const PORT = 3000;
+
+// Supabase client for persistent cross-container storage
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://btbcjijnrcnoutqskrtv.supabase.co';
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+let serverSupabase: SupabaseClient | null = null;
+
+if (SUPABASE_URL && SUPABASE_KEY) {
+  try {
+    serverSupabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log('[Server] Supabase client initialized for durable orders persistence');
+  } catch (e: any) {
+    console.warn('[Server] Supabase initialization warning:', e?.message || e);
+  }
+}
 
 // Body parsing with support for large image payloads / base64
 app.use(express.json({ limit: '50mb' }));
@@ -62,6 +77,107 @@ function writeJsonFile<T>(filePath: string, data: T): void {
     try {
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
     } catch {}
+  }
+}
+
+// -------------------------------------------------------------
+// SUPABASE DURABLE PERSISTENCE HELPERS
+// -------------------------------------------------------------
+const SUPABASE_ORDER_COLS = new Set([
+  'id', 'orderNumber', 'userId', 'customerName', 'customerEmail', 'companyName',
+  'items', 'total', 'subtotal', 'tax', 'shipping', 'discount',
+  'status', 'paymentStatus', 'paymentMethod', 'shippingAddress', 'billingAddress',
+  'notes', 'trackingNumber', 'carrierName', 'createdAt', 'updatedAt'
+]);
+
+function sanitizeOrderForSupabase(order: any): Record<string, any> {
+  const row: Record<string, any> = {};
+  for (const key of Object.keys(order)) {
+    if (SUPABASE_ORDER_COLS.has(key)) {
+      row[key] = order[key];
+    }
+  }
+  if (row.shipping === undefined && order.shippingCost !== undefined) {
+    row.shipping = order.shippingCost;
+  }
+  if (order.flwTransactionId || order.paymentReference) {
+    const marker = `[Flutterwave Tx: ${order.flwTransactionId || ''} | Ref: ${order.paymentReference || ''}]`;
+    if (!row.notes || !row.notes.includes(marker)) {
+      row.notes = `${row.notes ? `${row.notes} • ` : ''}${marker}`.trim();
+    }
+  }
+  return row;
+}
+
+async function syncOrderToSupabase(order: Order): Promise<void> {
+  if (!serverSupabase) return;
+  try {
+    const row = sanitizeOrderForSupabase(order);
+    const { error } = await serverSupabase.from('orders').upsert(row);
+    if (error) {
+      console.warn('[Server] Supabase order upsert warning:', error.message);
+    }
+  } catch (err: any) {
+    console.warn('[Server] Error syncing order to Supabase:', err.message);
+  }
+}
+
+async function deleteOrderFromSupabase(id: string): Promise<void> {
+  if (!serverSupabase) return;
+  try {
+    await serverSupabase.from('orders').delete().or(`id.eq.${id},orderNumber.eq.${id}`);
+  } catch (err: any) {
+    console.warn('[Server] Error deleting order from Supabase:', err.message);
+  }
+}
+
+async function hydrateOrdersFromSupabase(): Promise<void> {
+  if (!serverSupabase) return;
+  try {
+    const { data, error } = await serverSupabase.from('orders').select('*').order('createdAt', { ascending: false });
+    if (!error && data && data.length > 0) {
+      const currentOrders = readJsonFile<Order[]>(ORDERS_FILE, []);
+      const orderMap = new Map<string, Order>();
+      for (const o of currentOrders) {
+        orderMap.set(o.id, o);
+      }
+      for (const row of data) {
+        const notes = row.notes || '';
+        let flwTransactionId = (row as any).flwTransactionId;
+        let paymentReference = (row as any).paymentReference;
+        if (!flwTransactionId && notes) {
+          const txMatch = notes.match(/\[Flutterwave (?:Paid|Tx|Reconciled|Verified):\s*([^\]|]+)/i);
+          if (txMatch) flwTransactionId = txMatch[1].trim();
+        }
+        if (!paymentReference && notes) {
+          const refMatch = notes.match(/Ref:\s*([^\]]+)/i);
+          if (refMatch) paymentReference = refMatch[1].trim();
+        }
+
+        const restoredOrder: Order = {
+          ...(row as any),
+          flwTransactionId: flwTransactionId || undefined,
+          paymentReference: paymentReference || undefined,
+          paidAt: row.paymentStatus === 'paid' ? ((row as any).paidAt || row.updatedAt) : undefined
+        };
+
+        if (!orderMap.has(row.id)) {
+          orderMap.set(row.id, restoredOrder);
+        } else {
+          const existing = orderMap.get(row.id)!;
+          if (row.paymentStatus === 'paid' && existing.paymentStatus !== 'paid') {
+            orderMap.set(row.id, { ...existing, ...restoredOrder });
+          }
+        }
+      }
+      const merged = Array.from(orderMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      writeJsonFile(ORDERS_FILE, merged);
+      console.log(`[Server] Hydrated ${merged.length} orders from persistent Supabase storage`);
+    }
+  } catch (err: any) {
+    console.warn('[Server] Supabase orders hydration warning:', err.message);
   }
 }
 
@@ -454,12 +570,12 @@ app.delete('/api/categories/:id', (req: Request, res: Response) => {
 });
 
 // ORDERS CRUD
-app.get('/api/orders', (_req: Request, res: Response) => {
+app.get('/api/orders', async (_req: Request, res: Response) => {
   const orders = readJsonFile<Order[]>(ORDERS_FILE, []);
   res.json(orders);
 });
 
-app.post('/api/orders', (req: Request, res: Response) => {
+app.post('/api/orders', async (req: Request, res: Response) => {
   try {
     const orders = readJsonFile<Order[]>(ORDERS_FILE, []);
     const body = req.body;
@@ -481,6 +597,7 @@ app.post('/api/orders', (req: Request, res: Response) => {
 
     const updatedOrders = [newOrder, ...orders.filter(o => o.id !== newId)];
     writeJsonFile(ORDERS_FILE, updatedOrders);
+    syncOrderToSupabase(newOrder);
 
     broadcastSseEvent('order_created', { order: newOrder, orders: updatedOrders });
     res.status(201).json(newOrder);
@@ -489,39 +606,43 @@ app.post('/api/orders', (req: Request, res: Response) => {
   }
 });
 
-app.put('/api/orders/:id', (req: Request, res: Response) => {
+app.put('/api/orders/:id', async (req: Request, res: Response) => {
   try {
     const orders = readJsonFile<Order[]>(ORDERS_FILE, []);
     const { id } = req.params;
     const body = req.body;
     const now = new Date().toISOString();
 
-    const index = orders.findIndex(o => o.id === id);
+    const index = orders.findIndex(o => o.id === id || o.orderNumber === id);
+    let targetOrder: Order;
     if (index >= 0) {
-      // Guard: If trying to cancel an already paid order, reject
       if (body.status === 'cancelled' && orders[index].paymentStatus === 'paid') {
         return res.status(400).json({ error: 'Cannot cancel an order whose payment has already been verified and paid.' });
       }
-      orders[index] = { ...orders[index], ...body, id, updatedAt: now };
+      orders[index] = { ...orders[index], ...body, id: orders[index].id, updatedAt: now };
+      targetOrder = orders[index];
     } else {
-      orders.unshift({ ...body, id, updatedAt: now });
+      targetOrder = { ...body, id, updatedAt: now };
+      orders.unshift(targetOrder);
     }
 
     writeJsonFile(ORDERS_FILE, orders);
-    broadcastSseEvent('order_updated', { order: orders[index >= 0 ? index : 0], orders });
-    res.json(orders[index >= 0 ? index : 0]);
+    syncOrderToSupabase(targetOrder);
+    broadcastSseEvent('order_updated', { order: targetOrder, orders });
+    res.json(targetOrder);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to update order' });
   }
 });
 
-app.delete('/api/orders/:id', (req: Request, res: Response) => {
+app.delete('/api/orders/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     let orders = readJsonFile<Order[]>(ORDERS_FILE, []);
     orders = orders.filter(o => o.id !== id && o.orderNumber !== id);
 
     writeJsonFile(ORDERS_FILE, orders);
+    deleteOrderFromSupabase(id);
     broadcastSseEvent('order_deleted', { id, orders });
     res.json({ success: true, id });
   } catch (err: any) {
@@ -535,14 +656,55 @@ app.delete('/api/orders/:id', (req: Request, res: Response) => {
 // Flow: Customer -> Cart -> Checkout -> Order (pending) -> Flutterwave -> Payment Successful -> Verify -> Payment = paid -> Order = confirmed
 // -------------------------------------------------------------
 
+// Helper to query Flutterwave API with fallback between id and reference
+async function verifyWithFlutterwaveApi(flwSecretKey: string, transactionId?: string | number, txRef?: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  const cleanKey = flwSecretKey.trim();
+  const txIdStr = transactionId ? String(transactionId).trim() : '';
+  const txRefStr = txRef ? String(txRef).trim() : '';
+
+  // 1. Try standard /transactions/:id/verify if numeric or plausible id
+  if (txIdStr && (/^\d+$/.test(txIdStr) || !txIdStr.startsWith('EE-'))) {
+    try {
+      const res = await fetch(`https://api.flutterwave.com/v3/transactions/${encodeURIComponent(txIdStr)}/verify`, {
+        headers: { 'Authorization': `Bearer ${cleanKey}`, 'Content-Type': 'application/json' }
+      });
+      const json: any = await res.json();
+      if (json.status === 'success' && json.data && (json.data.status === 'successful' || json.data.status === 'completed')) {
+        return { success: true, data: json.data };
+      }
+    } catch (e: any) {
+      console.warn('[Flutterwave] Direct ID verification error:', e.message);
+    }
+  }
+
+  // 2. Try /transactions/verify_by_reference?tx_ref=...
+  const refToTry = txRefStr || (txIdStr.startsWith('EE-') ? txIdStr : '');
+  if (refToTry) {
+    try {
+      const res = await fetch(`https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(refToTry)}`, {
+        headers: { 'Authorization': `Bearer ${cleanKey}`, 'Content-Type': 'application/json' }
+      });
+      const json: any = await res.json();
+      if (json.status === 'success' && json.data && (json.data.status === 'successful' || json.data.status === 'completed')) {
+        return { success: true, data: json.data };
+      }
+    } catch (e: any) {
+      console.warn('[Flutterwave] Verify by reference error:', e.message);
+    }
+  }
+
+  return { success: false, error: 'Transaction could not be verified with Flutterwave API' };
+}
+
 // Get Flutterwave public configuration status
 app.get('/api/payments/flutterwave/config', (_req: Request, res: Response) => {
-  const hasSecretKey = Boolean(process.env.FLW_SECRET_KEY && process.env.FLW_SECRET_KEY.trim() !== '');
-  const publicKey = process.env.VITE_FLW_PUBLIC_KEY || process.env.FLW_PUBLIC_KEY || '';
+  const hasSecretKey = Boolean(process.env.FLW_SECRET_KEY && process.env.FLW_SECRET_KEY.trim() !== '' && process.env.FLW_SECRET_KEY !== 'MY_FLW_SECRET_KEY');
+  const publicKey = (process.env.VITE_FLW_PUBLIC_KEY || process.env.FLW_PUBLIC_KEY || '').trim();
   res.json({
-    configured: hasSecretKey,
+    configured: hasSecretKey && Boolean(publicKey),
     hasSecretKey,
-    publicKey: publicKey ? `${publicKey.slice(0, 10)}...` : '',
+    hasPublicKey: Boolean(publicKey),
+    publicKey: publicKey, // Full public key required for client-side Flutterwave inline checkout
     environment: (process.env.FLW_SECRET_KEY || '').includes('TEST') || (publicKey || '').includes('TEST') ? 'test' : 'live'
   });
 });
@@ -550,7 +712,7 @@ app.get('/api/payments/flutterwave/config', (_req: Request, res: Response) => {
 // Verify Flutterwave Transaction and transition Order to Paid & Confirmed
 app.post('/api/payments/flutterwave/verify', async (req: Request, res: Response) => {
   try {
-    const { transactionId, orderId, txRef, amount, currency } = req.body;
+    const { transactionId, orderId, txRef, amount, currency, customerEmail, customerName } = req.body;
 
     if (!transactionId && !txRef) {
       res.status(400).json({ error: 'transactionId or txRef is required for verification' });
@@ -558,52 +720,58 @@ app.post('/api/payments/flutterwave/verify', async (req: Request, res: Response)
     }
 
     const orders = readJsonFile<Order[]>(ORDERS_FILE, []);
-    const orderIndex = orders.findIndex(o => 
+    let orderIndex = orders.findIndex(o => 
       (orderId && o.id === orderId) || 
       (txRef && o.orderNumber === txRef) ||
       (txRef && o.id === txRef) ||
       (orderId && o.orderNumber === orderId)
     );
 
-    if (orderIndex === -1) {
-      res.status(404).json({ error: 'Matching order not found for transaction reference' });
-      return;
+    let targetOrder: Order | null = orderIndex >= 0 ? orders[orderIndex] : null;
+
+    // Check Supabase if not found in memory file
+    if (!targetOrder && serverSupabase) {
+      try {
+        let query = serverSupabase.from('orders').select('*');
+        if (orderId && txRef) {
+          query = query.or(`id.eq.${orderId},orderNumber.eq.${orderId},id.eq.${txRef},orderNumber.eq.${txRef}`);
+        } else if (orderId) {
+          query = query.or(`id.eq.${orderId},orderNumber.eq.${orderId}`);
+        } else if (txRef) {
+          query = query.or(`id.eq.${txRef},orderNumber.eq.${txRef}`);
+        }
+        const { data } = await query.limit(1);
+        if (data && data.length > 0) {
+          targetOrder = data[0] as Order;
+        }
+      } catch (sbErr) {
+        console.warn('[Server] Supabase order query warning:', sbErr);
+      }
     }
 
-    const targetOrder = orders[orderIndex];
     const flwSecretKey = process.env.FLW_SECRET_KEY?.trim();
     let verificationSuccess = false;
     let flwData: any = null;
     let verificationNote = '';
 
     if (flwSecretKey && flwSecretKey !== 'MY_FLW_SECRET_KEY' && transactionId && transactionId !== 'simulated_tx') {
-      // Real Server-to-Server Verification via Flutterwave API
-      try {
-        const flwRes = await fetch(`https://api.flutterwave.com/v3/transactions/${encodeURIComponent(transactionId)}/verify`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${flwSecretKey}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        const flwJson: any = await flwRes.json();
-
-        if (flwJson.status === 'success' && flwJson.data?.status === 'successful') {
-          flwData = flwJson.data;
+      const flwResult = await verifyWithFlutterwaveApi(flwSecretKey, transactionId, txRef);
+      if (flwResult.success && flwResult.data) {
+        flwData = flwResult.data;
+        verificationSuccess = true;
+        verificationNote = `Verified live via Flutterwave API (Ref: ${flwData.flw_ref || flwData.id})`;
+      } else {
+        // If live verification returned not found but simulated in development/preview:
+        if ((flwSecretKey.includes('TEST') || !flwSecretKey.startsWith('FLWSECK-')) && String(transactionId).startsWith('sim_')) {
           verificationSuccess = true;
-          verificationNote = `Verified live via Flutterwave API (Ref: ${flwData.flw_ref || flwData.id})`;
+          verificationNote = 'Verified in test sandbox fallback';
         } else {
           res.status(400).json({ 
-            error: flwJson.message || 'Flutterwave transaction verification reported unsuccessful status',
-            flwResponse: flwJson 
+            error: flwResult.error || 'Flutterwave transaction verification reported unsuccessful status',
+            details: flwResult
           });
           return;
         }
-      } catch (apiErr: any) {
-        console.error('Flutterwave API verification call failed:', apiErr);
-        res.status(502).json({ error: 'Failed to communicate with Flutterwave verification API', details: apiErr.message });
-        return;
       }
     } else {
       // Sandbox / Test Mode fallback when running in development or preview mode
@@ -611,54 +779,323 @@ app.post('/api/payments/flutterwave/verify', async (req: Request, res: Response)
       verificationNote = 'Verified in test sandbox mode (Development & Preview)';
       flwData = {
         id: transactionId || `FLW-TEST-${Date.now()}`,
-        tx_ref: txRef || targetOrder.orderNumber,
+        tx_ref: txRef || (targetOrder ? targetOrder.orderNumber : `EE-${Date.now()}`),
         flw_ref: `FLW-REF-${Date.now()}`,
-        amount: amount || targetOrder.total,
-        currency: currency || 'NGN',
+        amount: amount || (targetOrder ? targetOrder.total : 0),
+        currency: currency || (targetOrder ? targetOrder.currency : 'NGN'),
         status: 'successful',
         customer: {
-          email: targetOrder.customerEmail,
-          name: targetOrder.customerName
+          email: customerEmail || (targetOrder ? targetOrder.customerEmail : ''),
+          name: customerName || (targetOrder ? targetOrder.customerName : '')
         }
       };
     }
 
     if (verificationSuccess) {
       const now = new Date().toISOString();
-      const confirmedOrder: Order = {
-        ...targetOrder,
-        status: 'confirmed',       // Order = confirmed
-        paymentStatus: 'paid',      // Payment = paid
-        paymentMethod: 'flutterwave',
-        paymentReference: txRef || targetOrder.orderNumber,
-        flwTransactionId: transactionId || flwData?.id,
-        paidAt: now,
-        updatedAt: now,
-        notes: `${targetOrder.notes ? `${targetOrder.notes} • ` : ''}[Flutterwave Paid: ${flwData?.flw_ref || flwData?.id || transactionId}]`.trim()
-      };
 
-      orders[orderIndex] = confirmedOrder;
+      // If targetOrder did not exist yet (e.g. lost session or fresh redirect), RECOVER/CREATE it
+      if (!targetOrder) {
+        const generatedId = orderId || `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const generatedNumber = txRef || flwData?.tx_ref || `EE-${Date.now()}`;
+        const chargeAmount = Number(flwData?.amount || amount || 0);
+
+        targetOrder = {
+          id: generatedId,
+          orderNumber: generatedNumber,
+          userId: req.body.userId || `usr_${(flwData?.customer?.email || 'guest').replace(/[^a-z0-9]/gi, '_')}`,
+          customerName: flwData?.customer?.name || customerName || 'Wholesale Client',
+          customerEmail: flwData?.customer?.email || customerEmail || '',
+          companyName: req.body.companyName || 'Wholesale Buyer',
+          items: req.body.items || [
+            {
+              productId: 'flw-direct-order',
+              name: `Commercial Wholesale Order (${flwData?.currency || currency || 'NGN'} ${chargeAmount.toLocaleString()})`,
+              sku: 'EE-FLW-ORDER',
+              image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80',
+              quantity: 1,
+              unitPrice: chargeAmount,
+              unit: 'Wholesale Consignment',
+              subtotal: chargeAmount
+            }
+          ],
+          total: chargeAmount,
+          subtotal: chargeAmount,
+          shippingCost: 0,
+          transactionFee: 0,
+          vatFee: 0,
+          tax: 0,
+          currency: flwData?.currency || currency || 'NGN',
+          status: 'confirmed',
+          paymentStatus: 'paid',
+          paymentMethod: 'flutterwave',
+          paymentReference: flwData?.flw_ref || flwData?.tx_ref || txRef || generatedNumber,
+          flwTransactionId: String(flwData?.id || transactionId),
+          paidAt: flwData?.created_at || now,
+          shippingAddress: req.body.shippingAddress || {
+            street: 'Wholesale Dispatch Address (Flutterwave Checkout)',
+            city: 'Lagos',
+            state: 'Lagos',
+            country: 'Nigeria'
+          },
+          notes: `[Flutterwave Verified: ${flwData?.flw_ref || flwData?.id || transactionId}]`.trim(),
+          createdAt: flwData?.created_at || now,
+          updatedAt: now
+        };
+      } else {
+        targetOrder = {
+          ...targetOrder,
+          status: 'confirmed',
+          paymentStatus: 'paid',
+          paymentMethod: 'flutterwave',
+          paymentReference: flwData?.flw_ref || flwData?.tx_ref || txRef || targetOrder.orderNumber,
+          flwTransactionId: String(flwData?.id || transactionId),
+          paidAt: flwData?.created_at || now,
+          updatedAt: now,
+          notes: `${targetOrder.notes ? `${targetOrder.notes} • ` : ''}[Flutterwave Paid: ${flwData?.flw_ref || flwData?.id || transactionId}]`.trim()
+        };
+      }
+
+      // Save to memory file
+      const existingIdx = orders.findIndex(o => o.id === targetOrder!.id || o.orderNumber === targetOrder!.orderNumber);
+      if (existingIdx >= 0) {
+        orders[existingIdx] = targetOrder;
+      } else {
+        orders.unshift(targetOrder);
+      }
       writeJsonFile(ORDERS_FILE, orders);
 
-      // Broadcast order confirmation across real-time SSE stream
-      broadcastSseEvent('order_updated', { order: confirmedOrder, orders });
+      // Persist to Supabase
+      syncOrderToSupabase(targetOrder);
+
+      // Broadcast real-time SSE events
+      broadcastSseEvent('order_updated', { order: targetOrder, orders });
       broadcastSseEvent('order_payment_confirmed', { 
-        orderId: confirmedOrder.id, 
-        orderNumber: confirmedOrder.orderNumber,
-        flwTransactionId: confirmedOrder.flwTransactionId,
-        total: confirmedOrder.total
+        orderId: targetOrder.id, 
+        orderNumber: targetOrder.orderNumber,
+        flwTransactionId: targetOrder.flwTransactionId,
+        total: targetOrder.total
       });
 
       res.json({
         success: true,
         message: 'Transaction successfully verified. Payment marked as paid and order confirmed.',
-        order: confirmedOrder,
+        order: targetOrder,
         verificationNote
       });
     }
   } catch (err: any) {
     console.error('Error verifying Flutterwave transaction:', err);
     res.status(500).json({ error: err.message || 'Internal error during payment verification' });
+  }
+});
+
+// Verify & Claim Flutterwave Payment: Explicit reconciliation tool for customer & admin
+app.post('/api/payments/flutterwave/verify-and-claim', async (req: Request, res: Response) => {
+  try {
+    const { transactionId, txRef, customerEmail, userId, notes } = req.body;
+
+    if (!transactionId && !txRef && !customerEmail) {
+      res.status(400).json({ error: 'Please provide a Flutterwave Transaction ID, Reference, or Customer Email to reconcile' });
+      return;
+    }
+
+    const flwSecretKey = process.env.FLW_SECRET_KEY?.trim();
+    if (!flwSecretKey || flwSecretKey === 'MY_FLW_SECRET_KEY') {
+      res.status(400).json({ error: 'Flutterwave Secret Key is not configured on this server.' });
+      return;
+    }
+
+    let flwData: any = null;
+
+    // 1. Direct ID / Reference verification
+    if (transactionId || txRef) {
+      const flwResult = await verifyWithFlutterwaveApi(flwSecretKey, transactionId, txRef);
+      if (flwResult.success && flwResult.data) {
+        flwData = flwResult.data;
+      }
+    }
+
+    // 2. If not found by ID/Ref, try searching recent transactions by customer email
+    if (!flwData && customerEmail) {
+      try {
+        const emailUrl = `https://api.flutterwave.com/v3/transactions?customer_email=${encodeURIComponent(customerEmail.trim())}`;
+        const emailRes = await fetch(emailUrl, {
+          headers: { 'Authorization': `Bearer ${flwSecretKey}`, 'Content-Type': 'application/json' }
+        });
+        const emailJson: any = await emailRes.json();
+        if (emailJson.status === 'success' && Array.isArray(emailJson.data) && emailJson.data.length > 0) {
+          // Find the most recent successful transaction
+          const successfulTx = emailJson.data.find((tx: any) => tx.status === 'successful' || tx.status === 'completed');
+          if (successfulTx) {
+            flwData = successfulTx;
+          }
+        }
+      } catch (err: any) {
+        console.warn('[Flutterwave] Email transaction lookup warning:', err.message);
+      }
+    }
+
+    if (!flwData) {
+      res.status(404).json({ 
+        error: `No successful Flutterwave transaction was found matching ${transactionId ? `Transaction ID "${transactionId}"` : txRef ? `Reference "${txRef}"` : `Email "${customerEmail}"`}. Please verify the reference from your payment confirmation email or bank statement.` 
+      });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const orders = readJsonFile<Order[]>(ORDERS_FILE, []);
+
+    // Find if an order already matches
+    const matchedTxRef = flwData.tx_ref || txRef;
+    const matchedTxId = String(flwData.id);
+    const matchedCustomerEmail = (flwData.customer?.email || customerEmail || '').toLowerCase();
+
+    let matchedOrder = orders.find(o => 
+      (matchedTxRef && (o.orderNumber === matchedTxRef || o.id === matchedTxRef)) ||
+      (o.flwTransactionId && String(o.flwTransactionId) === matchedTxId) ||
+      (o.notes && o.notes.includes(matchedTxId)) ||
+      (matchedCustomerEmail && o.customerEmail.toLowerCase() === matchedCustomerEmail && o.paymentStatus === 'pending')
+    );
+
+    if (matchedOrder) {
+      matchedOrder = {
+        ...matchedOrder,
+        status: 'confirmed',
+        paymentStatus: 'paid',
+        paymentMethod: 'flutterwave',
+        flwTransactionId: matchedTxId,
+        paymentReference: matchedTxRef || matchedOrder.orderNumber,
+        paidAt: flwData.created_at || now,
+        updatedAt: now,
+        notes: `${matchedOrder.notes ? `${matchedOrder.notes} • ` : ''}[Flutterwave Reconciled: ${matchedTxId}]`.trim()
+      };
+      const idx = orders.findIndex(o => o.id === matchedOrder!.id);
+      if (idx >= 0) orders[idx] = matchedOrder;
+    } else {
+      // Reconstruct confirmed order
+      const newOrderNumber = matchedTxRef || `EE-${Date.now()}`;
+      const amount = Number(flwData.amount || 0);
+
+      matchedOrder = {
+        id: `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        orderNumber: newOrderNumber,
+        userId: userId || `usr_${matchedCustomerEmail.replace(/[^a-z0-9]/gi, '_')}`,
+        customerName: flwData.customer?.name || 'Verified Wholesale Client',
+        customerEmail: flwData.customer?.email || customerEmail || '',
+        companyName: 'Wholesale Commercial Buyer',
+        items: [
+          {
+            productId: 'flw-reconciled-consignment',
+            name: `Reconciled Wholesale Order (${flwData.currency || 'NGN'} ${amount.toLocaleString()})`,
+            sku: 'EE-FLW-CARGO',
+            image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80',
+            quantity: 1,
+            unitPrice: amount,
+            unit: 'Commercial Order',
+            subtotal: amount
+          }
+        ],
+        total: amount,
+        subtotal: amount,
+        shippingCost: 0,
+        transactionFee: 0,
+        vatFee: 0,
+        tax: 0,
+        currency: flwData.currency || 'NGN',
+        status: 'confirmed',
+        paymentStatus: 'paid',
+        paymentMethod: 'flutterwave',
+        flwTransactionId: matchedTxId,
+        paymentReference: matchedTxRef || flwData.flw_ref || matchedTxId,
+        paidAt: flwData.created_at || now,
+        shippingAddress: {
+          street: 'Registered Wholesale Address',
+          city: 'Lagos',
+          state: 'Lagos',
+          country: 'Nigeria'
+        },
+        notes: `[Flutterwave Reconciled & Claimed: ${matchedTxId}] ${notes ? `• ${notes}` : ''}`.trim(),
+        createdAt: flwData.created_at || now,
+        updatedAt: now
+      };
+      orders.unshift(matchedOrder);
+    }
+
+    writeJsonFile(ORDERS_FILE, orders);
+    syncOrderToSupabase(matchedOrder);
+
+    broadcastSseEvent('order_updated', { order: matchedOrder, orders });
+    broadcastSseEvent('order_payment_confirmed', {
+      orderId: matchedOrder.id,
+      orderNumber: matchedOrder.orderNumber,
+      flwTransactionId: matchedOrder.flwTransactionId,
+      total: matchedOrder.total
+    });
+
+    res.json({
+      success: true,
+      message: `Flutterwave payment for ${matchedOrder.currency} ${matchedOrder.total.toLocaleString()} successfully verified and linked to Order #${matchedOrder.orderNumber}.`,
+      order: matchedOrder
+    });
+  } catch (err: any) {
+    console.error('Error claiming Flutterwave transaction:', err);
+    res.status(500).json({ error: err.message || 'Internal error during payment claim' });
+  }
+});
+
+// Fetch Live Flutterwave Gateway Transactions for Admin Reconciliation
+app.get('/api/payments/flutterwave/transactions', async (_req: Request, res: Response) => {
+  try {
+    const flwSecretKey = process.env.FLW_SECRET_KEY?.trim();
+    if (!flwSecretKey || flwSecretKey === 'MY_FLW_SECRET_KEY') {
+      res.status(400).json({ error: 'Flutterwave Secret Key is not configured' });
+      return;
+    }
+
+    const response = await fetch('https://api.flutterwave.com/v3/transactions?limit=25', {
+      headers: { 'Authorization': `Bearer ${flwSecretKey}`, 'Content-Type': 'application/json' }
+    });
+    const data: any = await response.json();
+
+    if (data.status !== 'success') {
+      res.status(502).json({ error: data.message || 'Failed to fetch Flutterwave transactions' });
+      return;
+    }
+
+    const orders = readJsonFile<Order[]>(ORDERS_FILE, []);
+    const flwTransactions = (data.data || []).map((tx: any) => {
+      const matchedOrder = orders.find(o => 
+        (tx.tx_ref && (o.orderNumber === tx.tx_ref || o.id === tx.tx_ref)) ||
+        (o.flwTransactionId && String(o.flwTransactionId) === String(tx.id)) ||
+        (o.notes && o.notes.includes(String(tx.id)))
+      );
+
+      return {
+        id: tx.id,
+        tx_ref: tx.tx_ref,
+        flw_ref: tx.flw_ref,
+        amount: tx.amount,
+        currency: tx.currency,
+        status: tx.status,
+        customer: tx.customer,
+        created_at: tx.created_at,
+        payment_type: tx.payment_type,
+        matchedOrderId: matchedOrder ? matchedOrder.id : null,
+        matchedOrderNumber: matchedOrder ? matchedOrder.orderNumber : null,
+        matchedOrderStatus: matchedOrder ? matchedOrder.status : null,
+        matchedPaymentStatus: matchedOrder ? matchedOrder.paymentStatus : null
+      };
+    });
+
+    res.json({
+      success: true,
+      count: flwTransactions.length,
+      transactions: flwTransactions
+    });
+  } catch (err: any) {
+    console.error('Error fetching live Flutterwave transactions:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch live transactions' });
   }
 });
 
@@ -678,23 +1115,79 @@ app.post('/api/payments/flutterwave/webhook', (req: Request, res: Response) => {
       const flwData = payload.data;
       const txRef = flwData.tx_ref;
       const orders = readJsonFile<Order[]>(ORDERS_FILE, []);
-      const orderIndex = orders.findIndex(o => o.orderNumber === txRef || o.id === txRef);
+      let orderIndex = orders.findIndex(o => o.orderNumber === txRef || o.id === txRef);
+
+      const now = new Date().toISOString();
+      let confirmedOrder: Order;
 
       if (orderIndex >= 0) {
-        const now = new Date().toISOString();
-        orders[orderIndex] = {
+        confirmedOrder = {
           ...orders[orderIndex],
           status: 'confirmed',
           paymentStatus: 'paid',
           paymentMethod: 'flutterwave',
           paymentReference: txRef,
-          flwTransactionId: flwData.id,
+          flwTransactionId: String(flwData.id),
           paidAt: now,
+          updatedAt: now,
+          notes: `${orders[orderIndex].notes ? `${orders[orderIndex].notes} • ` : ''}[Webhook Verified: ${flwData.id}]`.trim()
+        };
+        orders[orderIndex] = confirmedOrder;
+      } else {
+        confirmedOrder = {
+          id: `ord_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          orderNumber: txRef || `EE-${Date.now()}`,
+          userId: `usr_${(flwData.customer?.email || 'guest').replace(/[^a-z0-9]/gi, '_')}`,
+          customerName: flwData.customer?.name || 'Wholesale Client',
+          customerEmail: flwData.customer?.email || '',
+          companyName: 'Wholesale Buyer',
+          items: [
+            {
+              productId: 'webhook-order',
+              name: `Wholesale Order (${flwData.currency || 'NGN'} ${Number(flwData.amount).toLocaleString()})`,
+              sku: 'EE-FLW-ORDER',
+              image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80',
+              quantity: 1,
+              unitPrice: Number(flwData.amount),
+              unit: 'Wholesale Consignment',
+              subtotal: Number(flwData.amount)
+            }
+          ],
+          total: Number(flwData.amount),
+          subtotal: Number(flwData.amount),
+          shippingCost: 0,
+          transactionFee: 0,
+          vatFee: 0,
+          tax: 0,
+          currency: flwData.currency || 'NGN',
+          status: 'confirmed',
+          paymentStatus: 'paid',
+          paymentMethod: 'flutterwave',
+          paymentReference: txRef,
+          flwTransactionId: String(flwData.id),
+          paidAt: now,
+          shippingAddress: {
+            street: 'Wholesale Delivery (Webhook Reconciled)',
+            city: 'Lagos',
+            state: 'Lagos',
+            country: 'Nigeria'
+          },
+          notes: `[Webhook Verified: ${flwData.id}]`.trim(),
+          createdAt: now,
           updatedAt: now
         };
-        writeJsonFile(ORDERS_FILE, orders);
-        broadcastSseEvent('order_updated', { order: orders[orderIndex], orders });
+        orders.unshift(confirmedOrder);
       }
+
+      writeJsonFile(ORDERS_FILE, orders);
+      syncOrderToSupabase(confirmedOrder);
+      broadcastSseEvent('order_updated', { order: confirmedOrder, orders });
+      broadcastSseEvent('order_payment_confirmed', {
+        orderId: confirmedOrder.id,
+        orderNumber: confirmedOrder.orderNumber,
+        flwTransactionId: confirmedOrder.flwTransactionId,
+        total: confirmedOrder.total
+      });
     }
 
     res.status(200).send('EVENT_RECEIVED');
@@ -1273,6 +1766,13 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // VITE INTEGRATION
 // -------------------------------------------------------------
 async function startServer() {
+  // Hydrate orders from persistent Supabase database
+  try {
+    await hydrateOrdersFromSupabase();
+  } catch (err: any) {
+    console.warn('[Server] Order hydration during startup warning:', err.message);
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

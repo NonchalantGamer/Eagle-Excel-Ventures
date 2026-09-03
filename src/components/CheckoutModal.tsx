@@ -40,6 +40,8 @@ interface CheckoutModalProps {
     items: CartItem[];
     subtotal: number;
     shippingCost: number;
+    transactionFee?: number;
+    vatFee?: number;
     tax: number;
     total: number;
   } | null;
@@ -54,14 +56,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onOpenAuth,
   checkoutData
 }) => {
-  const { items: cartItems, subtotal: cartSubtotal, shippingCost: cartShippingCost, total: cartTotal, clearCart } = useCart();
+  const { 
+    items: cartItems, 
+    subtotal: cartSubtotal, 
+    shippingCost: cartShippingCost, 
+    transactionFee: cartTransactionFee,
+    vatFee: cartVatFee,
+    total: cartTotal, 
+    clearCart 
+  } = useCart();
   
   // Use checkoutData snapshot if provided, otherwise fallback to cart context
   const items = checkoutData?.items ?? cartItems;
   const subtotal = checkoutData?.subtotal ?? cartSubtotal;
   const shippingCost = checkoutData?.shippingCost ?? cartShippingCost;
+  const transactionFee = checkoutData?.transactionFee ?? cartTransactionFee ?? Number(((subtotal + shippingCost) * 0.02).toFixed(2));
+  const vatFee = checkoutData?.vatFee ?? cartVatFee ?? Number((15 / 1550).toFixed(4));
   const tax = checkoutData?.tax ?? 0;
-  const total = checkoutData?.total ?? cartTotal;
+  const total = checkoutData?.total ?? cartTotal ?? Number((subtotal + shippingCost + transactionFee + vatFee).toFixed(2));
   const { currentUser, userProfile } = useAuth();
   const { formatPrice, convertPrice, currency: currentCurrency } = useCurrency();
   const { isDark } = useTheme();
@@ -151,6 +163,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         items: orderItems,
         subtotal,
         shippingCost,
+        transactionFee,
+        vatFee,
         tax: 0,
         total,
         currency: currentCurrency || 'NGN',
@@ -366,6 +380,34 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <div className="font-extrabold text-[#F27D26]">{formatPrice(item.subtotal)}</div>
                   </div>
                 ))}
+              </div>
+              <div className="p-3.5 bg-slate-100/70 dark:bg-white/5 border-t border-slate-200 dark:border-white/5 space-y-1.5 text-[11px]">
+                <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                  <span>Items Subtotal:</span>
+                  <span className="font-semibold text-slate-900 dark:text-zinc-200">{formatPrice(createdOrder.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                  <span>Freight Logistics:</span>
+                  <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                    {createdOrder.shippingCost === 0 ? 'FREE' : formatPrice(createdOrder.shippingCost)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                  <span>Transaction Fee (2%):</span>
+                  <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                    +{formatPrice(createdOrder.transactionFee ?? Number(((createdOrder.subtotal + createdOrder.shippingCost) * 0.02).toFixed(2)))}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                  <span>VAT Fee (₦15 eq.):</span>
+                  <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                    +{formatPrice(createdOrder.vatFee ?? Number((15 / 1550).toFixed(4)))}
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex justify-between font-bold text-xs text-slate-900 dark:text-zinc-100">
+                  <span>Total Amount Paid:</span>
+                  <span className="text-sm font-extrabold text-[#F27D26]">{formatPrice(createdOrder.total)}</span>
+                </div>
               </div>
             </div>
 
@@ -666,6 +708,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <span>Est. Freight Logistics:</span>
                 <span className="font-semibold text-slate-900 dark:text-zinc-200">
                   {shippingCost === 0 ? <strong className="text-emerald-600 dark:text-emerald-400">FREE Freight</strong> : formatPrice(shippingCost)}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                <span>Transaction Processing Fee (2%):</span>
+                <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                  +{formatPrice(transactionFee)}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                <span>VAT Fee (₦15 eq.):</span>
+                <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                  +{formatPrice(vatFee)}
                 </span>
               </div>
               <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex justify-between text-sm font-extrabold text-slate-900 dark:text-zinc-100">

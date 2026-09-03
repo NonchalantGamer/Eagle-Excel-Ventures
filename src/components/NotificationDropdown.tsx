@@ -385,7 +385,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onNa
                 )}
 
                 {/* Filter Pills */}
-                <div className="flex items-center gap-1 px-3 py-2 border-b border-slate-100 dark:border-white/5 bg-white dark:bg-[#18181b] overflow-x-auto overscroll-contain text-[11px] font-bold">
+                <div className="flex items-center gap-1 px-3 py-2 border-b border-slate-100 dark:border-white/5 bg-white dark:bg-[#18181b] overflow-x-auto text-[11px] font-bold">
                   <button
                     type="button"
                     onClick={() => setFilter('important')}

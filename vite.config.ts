@@ -13,7 +13,17 @@ export default defineConfig(() => {
       dedupe: ['react', 'react-dom'],
     },
     optimizeDeps: {
-      include: ['react', 'react-dom'],
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'lucide-react',
+        'canvas-confetti',
+        'recharts',
+        '@supabase/supabase-js'
+      ],
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

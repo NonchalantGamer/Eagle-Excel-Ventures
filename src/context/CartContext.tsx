@@ -6,6 +6,8 @@ interface CartContextType {
   itemCount: number;
   subtotal: number;
   shippingCost: number;
+  transactionFee: number;
+  vatFee: number;
   tax: number;
   total: number;
   addToCart: (product: Product, quantity?: number) => void;
@@ -180,13 +182,30 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           .toFixed(2)
       ), [items]);
   const tax = 0; // Estimated tax removed per business requirements
-  const total = useMemo(() => Number((subtotal + shippingCost).toFixed(2)), [subtotal, shippingCost]);
+  // 2% transaction fee of order total amount at checkout
+  const transactionFee = useMemo(() => {
+    if (items.length === 0) return 0;
+    return Number(((subtotal + shippingCost) * 0.02).toFixed(2));
+  }, [items.length, subtotal, shippingCost]);
+
+  // Additional VAT fee of 15 Naira (or currency equivalent; 1 USD = 1,550 NGN)
+  const vatFee = useMemo(() => {
+    if (items.length === 0) return 0;
+    return Number((15 / 1550).toFixed(4));
+  }, [items.length]);
+
+  const total = useMemo(() => {
+    if (items.length === 0) return 0;
+    return Number((subtotal + shippingCost + transactionFee + vatFee).toFixed(2));
+  }, [items.length, subtotal, shippingCost, transactionFee, vatFee]);
 
   const contextValue = useMemo(() => ({
     items,
     itemCount,
     subtotal,
     shippingCost,
+    transactionFee,
+    vatFee,
     tax,
     total,
     addToCart,
@@ -203,6 +222,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     itemCount,
     subtotal,
     shippingCost,
+    transactionFee,
+    vatFee,
     tax,
     total,
     addToCart,

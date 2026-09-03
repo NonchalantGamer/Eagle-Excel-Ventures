@@ -1217,7 +1217,19 @@ export const CustomerDashboard: React.FC = () => {
                   </div>
                   <div className="flex justify-between text-slate-600 dark:text-zinc-400">
                     <span>Est. Freight Logistics:</span>
-                    <span className="font-semibold text-slate-900 dark:text-zinc-200">{formatPrice(selectedOrder.shippingCost)}</span>
+                    <span className="font-semibold text-slate-900 dark:text-zinc-200">{selectedOrder.shippingCost === 0 ? 'FREE' : formatPrice(selectedOrder.shippingCost)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                    <span>Transaction Fee (2%):</span>
+                    <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                      {formatPrice(selectedOrder.transactionFee ?? Number(((selectedOrder.subtotal + selectedOrder.shippingCost) * 0.02).toFixed(2)))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                    <span>VAT Fee (₦15 eq.):</span>
+                    <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                      {formatPrice(selectedOrder.vatFee ?? Number((15 / 1550).toFixed(4)))}
+                    </span>
                   </div>
                   <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex justify-between font-extrabold text-sm text-slate-900 dark:text-zinc-100">
                     <span>Total Invoiced:</span>

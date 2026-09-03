@@ -8,32 +8,7 @@
     <script>
       (function() {
         try {
-          // 1. Intercept Object.defineProperty to safely permit multiple wallet extensions/iframe re-definitions
-          var origDefineProperty = Object.defineProperty;
-          var protectedProps = ['ethereum', 'solana', 'phantom', 'coinbasewalletextension', 'web3', 'trustwallet', 'bitkeep'];
-          
-          Object.defineProperty = function(target, propertyKey, descriptor) {
-            try {
-              if (target === window && typeof propertyKey === 'string') {
-                var lowerKey = propertyKey.toLowerCase();
-                if (protectedProps.indexOf(lowerKey) !== -1) {
-                  var currentDescriptor = Object.getOwnPropertyDescriptor(window, propertyKey);
-                  if (currentDescriptor && !currentDescriptor.configurable) {
-                    // Property already defined non-configurably; safely return target rather than throwing TypeError
-                    return target;
-                  }
-                  if (descriptor && typeof descriptor === 'object') {
-                    descriptor.configurable = true;
-                  }
-                }
-              }
-              return origDefineProperty.call(Object, target, propertyKey, descriptor);
-            } catch (e) {
-              return target;
-            }
-          };
-
-          // 2. Pre-declare configurable ethereum property on window to absorb extension assignments
+          // Pre-declare configurable ethereum property on window to absorb extension assignments
           var _eth = undefined;
           try {
             Object.defineProperty(window, 'ethereum', {
@@ -44,7 +19,7 @@
             });
           } catch (e) {}
 
-          // 3. Catch and suppress uncaught errors from external browser extensions
+          // Catch and suppress uncaught errors from external browser extensions
           window.addEventListener('error', function(event) {
             var msg = (event && (event.message || (event.error && event.error.message))) || '';
             var filename = (event && event.filename) || '';
@@ -66,7 +41,7 @@
             }
           }, true);
 
-          // 4. Catch and suppress unhandled promise rejections from extensions
+          // Catch and suppress unhandled promise rejections from extensions
           window.addEventListener('unhandledrejection', function(event) {
             var reasonMsg = (event && event.reason && (event.reason.message || event.reason.toString())) || '';
             if (typeof reasonMsg === 'string' && (

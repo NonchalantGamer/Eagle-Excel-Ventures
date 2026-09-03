@@ -62,12 +62,13 @@ main,
   -webkit-overflow-scrolling: touch;
 }
 
-/* Enforce strict scroll boundaries and deliberate spacing on horizontal lists and their scrollbars */
+/* Allow natural vertical scroll pass-through and deliberate spacing on horizontal lists and their scrollbars */
 .overflow-x-auto,
 .overflow-x-scroll,
 .horizontal-scroll-list,
 [data-horizontal-list] {
-  overscroll-behavior: contain;
+  overscroll-behavior-x: auto;
+  overscroll-behavior-y: auto;
   padding-bottom: 0.625rem; /* Generous breathing room between list items and horizontal scrollbar */
   margin-bottom: 0.375rem;   /* Clean spacing between the horizontal scrollbar and content below */
   scrollbar-gutter: stable;

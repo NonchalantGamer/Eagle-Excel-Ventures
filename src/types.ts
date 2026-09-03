@@ -146,6 +146,8 @@ export interface Order {
   subtotal: number;
   shippingCost: number;
   tax?: number;
+  transactionFee?: number;
+  vatFee?: number;
   total: number;
   status: OrderStatus;
   paymentStatus?: PaymentStatus;

@@ -68,7 +68,8 @@
     "rating": 4.9,
     "reviewsCount": 142,
     "createdAt": "2026-07-26T12:20:41.815Z",
-    "estimatedFreight": 25
+    "estimatedFreight": 25,
+    "updatedAt": "2026-09-03T10:40:07.595Z"
   },
   {
     "id": "prod_ee_06",

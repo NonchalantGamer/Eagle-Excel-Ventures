@@ -3,6 +3,14 @@ import { Order, OrderStatus } from '../types';
 
 const ORDERS_TABLE = 'orders';
 
+// Helper to sanitize order payload for Supabase schema (removing non-existent columns)
+function mapOrderToSupabaseRow(order: Partial<Order>): Record<string, any> {
+  const row: Record<string, any> = { ...order };
+  delete row.transactionFee;
+  delete row.vatFee;
+  return row;
+}
+
 // Place a new Wholesale Purchase Order
 export async function createOrderInDatabase(orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>): Promise<Order> {
   const now = new Date();
@@ -49,7 +57,7 @@ export async function createOrderInDatabase(orderData: Omit<Order, 'id' | 'order
     const supabase = getSupabase();
     if (supabase) {
       try {
-        await supabase.from(ORDERS_TABLE).insert(order);
+        await supabase.from(ORDERS_TABLE).insert(mapOrderToSupabaseRow(order));
       } catch {}
     }
   }
@@ -177,7 +185,7 @@ export async function updateOrderStatus(
     const supabase = getSupabase();
     if (supabase) {
       try {
-        await supabase.from(ORDERS_TABLE).update(updates).eq('id', orderId);
+        await supabase.from(ORDERS_TABLE).update(mapOrderToSupabaseRow(updates)).eq('id', orderId);
       } catch {}
     }
   }
@@ -240,7 +248,7 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<{ s
       const supabase = getSupabase();
       if (supabase) {
         try {
-          await supabase.from(ORDERS_TABLE).update(updates).eq('id', orderId);
+          await supabase.from(ORDERS_TABLE).update(mapOrderToSupabaseRow(updates)).eq('id', orderId);
         } catch {}
       }
     }

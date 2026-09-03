@@ -34,6 +34,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
     itemCount, 
     subtotal, 
     shippingCost, 
+    transactionFee, 
+    vatFee, 
     tax, 
     total, 
     updateQuantity, 
@@ -51,6 +53,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
     items: CartItem[];
     subtotal: number;
     shippingCost: number;
+    transactionFee: number;
+    vatFee: number;
     tax: number;
     total: number;
   } | null>(null);
@@ -63,20 +67,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
       return;
     }
 
-    // 1. Snapshot cart data before clearing
+    // 1. Snapshot cart data
     const currentCheckoutData = {
       items: [...items],
       subtotal,
       shippingCost,
+      transactionFee,
+      vatFee,
       tax: 0,
       total
     };
     setCheckoutData(currentCheckoutData);
 
-    // 2. Clear the cart immediately so no items are left there
-    clearCart();
-
-    // 3. Open the checkout modal and close the cart drawer
+    // 2. Open the checkout modal and close the cart drawer
     setIsCheckoutOpen(true);
     setIsCartOpen(false);
   };
@@ -181,6 +184,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
               <div class="totals-row">
                 <span>Est. Freight Shipping:</span>
                 <strong>${shippingCost === 0 ? 'FREE' : formatPrice(shippingCost)}</strong>
+              </div>
+              <div class="totals-row">
+                <span>Transaction Fee (2%):</span>
+                <strong>${formatPrice(transactionFee)}</strong>
+              </div>
+              <div class="totals-row">
+                <span>VAT Fee (₦15 / eq.):</span>
+                <strong>${formatPrice(vatFee)}</strong>
               </div>
               <div class="totals-row totals-grand">
                 <span>Estimated Total:</span>
@@ -392,6 +403,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onOrderSuccess, onOpenAu
                     <span>Est. Freight Shipping:</span>
                     <span className="font-semibold text-slate-900 dark:text-zinc-200">
                       {shippingCost === 0 ? <strong className="text-emerald-600 dark:text-emerald-400 font-bold">FREE</strong> : formatPrice(shippingCost)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                    <span>Transaction Fee (2%):</span>
+                    <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                      {formatPrice(transactionFee)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 dark:text-zinc-400">
+                    <span>VAT Fee (₦15 eq.):</span>
+                    <span className="font-semibold text-slate-900 dark:text-zinc-200">
+                      {formatPrice(vatFee)}
                     </span>
                   </div>
                   <div className="pt-2 border-t border-slate-200 dark:border-white/5 flex justify-between text-sm font-bold text-slate-900 dark:text-zinc-100">

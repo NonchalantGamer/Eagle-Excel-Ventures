@@ -2570,6 +2570,8 @@ VITE_SUPABASE_ANON_KEY=your-supabase-anon-key`}
                 <div className="w-64 space-y-1 bg-[#161616] p-3 rounded-xl border border-white/5 text-zinc-300">
                   <div className="flex justify-between"><span>Subtotal:</span><strong className="text-zinc-100">${selectedOrder.subtotal.toFixed(2)}</strong></div>
                   <div className="flex justify-between"><span>Est. Freight:</span><strong className="text-zinc-100">${selectedOrder.shippingCost.toFixed(2)}</strong></div>
+                  <div className="flex justify-between"><span>Tx Fee (2%):</span><strong className="text-zinc-100">${(selectedOrder.transactionFee ?? Number(((selectedOrder.subtotal + selectedOrder.shippingCost) * 0.02).toFixed(2))).toFixed(2)}</strong></div>
+                  <div className="flex justify-between"><span>VAT Fee (₦15 eq.):</span><strong className="text-zinc-100">${(selectedOrder.vatFee ?? Number((15 / 1550).toFixed(4))).toFixed(2)}</strong></div>
                   <div className="pt-1 border-t border-white/10 flex justify-between font-bold text-sm text-[#F27D26]">
                     <span>Total:</span><span>${selectedOrder.total.toFixed(2)}</span>
                   </div>
